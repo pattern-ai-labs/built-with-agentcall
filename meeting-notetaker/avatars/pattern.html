@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{BOT_NAME}}</title>
+<style>
+  /* AgentCall's Pattern mark (radial sunburst), locked to the calm "listening"
+     look — a notetaker just listens, so there's no voice-state or audio here. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0a0e1a;
+    --text: #e6eaf2;
+    --text-dim: #8b95ad;
+    --listening: #f5f7fb;
+  }
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+  }
+  .stage {
+    width: 100%;
+    max-width: 720px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+  .radial {
+    position: relative;
+    width: 320px;
+    height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--listening);
+    contain: layout style paint;
+  }
+  .radial-inner { position: relative; width: 280px; height: 280px; }
+  .bar {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 60px;
+    border-radius: 3px;
+    background: currentColor;
+    opacity: 0.4;
+    transform-origin: center bottom;
+    will-change: opacity, height;
+    animation: spoke-pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes spoke-pulse {
+    0%, 100% { opacity: 0.55; }
+    50%      { opacity: 0.95; }
+  }
+  .status-block {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+  }
+  .activity {
+    /* The bot's name. Swap this font-family for any look you want. */
+    font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
+    font-size: 36px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--listening);
+    line-height: 1.25;
+  }
+  .sub-activity {
+    font-family: "SF Mono", "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, monospace;
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    color: var(--text-dim);
+    line-height: 1.4;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #ff5b5b; animation: blink 1.7s ease-in-out infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <div class="radial" id="radial">
+      <div class="radial-inner" id="radial-inner"></div>
+    </div>
+    <div class="status-block">
+      <div class="activity">{{BOT_NAME}}</div>
+      <div class="sub-activity"><span class="dot"></span> Taking notes</div>
+    </div>
+  </div>
+<script>
+  // Build the 16 spokes exactly as the Pattern template does — equal angular
+  // spacing, anchored at the inner end. They pulse via CSS; no state machine.
+  const BAR_COUNT = 16, RADIUS = 36;
+  const inner = document.getElementById("radial-inner");
+  for (let i = 0; i < BAR_COUNT; i++) {
+    const angleDeg = (i / BAR_COUNT) * 360 - 90;
+    const angleRad = angleDeg * Math.PI / 180;
+    const cx = Math.cos(angleRad) * RADIUS;
+    const cy = Math.sin(angleRad) * RADIUS;
+    const bar = document.createElement("div");
+    bar.className = "bar";
+    bar.style.left = "50%";
+    bar.style.top = "50%";
+    bar.style.transform = `translate(-50%, -100%) translate(${cx}px, ${cy}px) rotate(${angleDeg + 90}deg)`;
+    bar.style.transformOrigin = "50% 100%";
+    inner.appendChild(bar);
+  }
+</script>
+</body>
+</html>

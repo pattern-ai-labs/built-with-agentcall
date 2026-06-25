@@ -1,0 +1,4 @@
+# The notetaker itself uses only the Python standard library.
+# These two are for the bundled bridge (engine/bridge.py), AgentCall's transport.
+aiohttp>=3.9
+websockets>=12.0

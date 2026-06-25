@@ -1,0 +1,11 @@
+# Normalize line endings: store text files as LF in the repo on every OS, so
+# shebang lines and scripts stay intact on macOS/Linux even when authored on
+# Windows (a CRLF shebang breaks `#!/usr/bin/env python3` / `node`).
+* text=auto eol=lf
+
+*.py     text eol=lf
+*.js     text eol=lf
+*.html   text eol=lf
+*.md     text eol=lf
+*.json   text eol=lf
+*.jsonc  text eol=lf

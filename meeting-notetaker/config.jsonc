@@ -1,0 +1,39 @@
+{
+  // ══════════════════════════════════════════════════════════════════════════
+  //  YOUR NOTETAKER — the one file you edit (settings shared by python & node).
+  //  Run the builder once to fill it in, or just edit it directly. JSON + comments.
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // Your notetaker's name (shown in the meeting). Set it via the builder —
+  //   python build.py     (or)     npm run build
+  // — or just fill it in here. Keep it short & distinctive; speech-to-text can
+  // mishear long names. Left blank = "not built yet" (builder default: "AgentCall").
+  "BOT_NAME": "",
+
+  // Where notes are saved, and in what format. A relative path is saved at the
+  // repo root, so notes/ sits next to python/ and node/ (shared by both).
+  "OUTPUT_FORMAT": "md",        // "md", "txt", or "json"
+  "OUTPUT_DIR": "notes",
+
+  // Also save meeting chat messages, not just speech.
+  "CAPTURE_CHAT": true,
+
+  // Leave the instant the last human leaves, so it never lingers in an empty room.
+  "LEAVE_WHEN_EMPTY": true,
+  "ALONE_SECONDS": 30,          // safety net: the bridge also leaves after this long alone
+
+  // A live transcript page in YOUR browser at http://localhost:<WEB_PORT>.
+  "WEB": true,
+  "WEB_PORT": 8080,
+
+  // The bot's video tile (its "camera" in the meeting):
+  //   "audio"      — no video, just listens. Lightest & most reliable — the default.
+  //   "pattern"    — the Pattern AI Labs logo.
+  //   "ring"       — a glowing neon ring.
+  //   "transcript" — the live transcript, on screen.
+  // Audio is the default; the on-camera options are opt-in (they use video mode).
+  // To use your OWN avatar, drop a file in avatars/ and set DISPLAY to its name:
+  // a raw image (avatars/me.png / .jpg / .gif / .svg) OR an HTML page (avatars/me.html).
+  "DISPLAY": "audio",
+  "AVATAR_LINES": 8             // transcript tile: how many recent lines to show
+}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{BOT_NAME}}</title>
+<style>
+  /* AgentCall's Ring mark — a glowing neon ring on canvas, gently breathing.
+     No voice-state, no websocket, no audio: a notetaker just listens. */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+    height: 100vh; overflow: hidden;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  .container { text-align: center; }
+  canvas { display: block; margin: 0 auto; }
+  .name { color: #e0e0e0; font-size: 22px; font-weight: 500; margin-top: 20px; letter-spacing: 0.5px; }
+  .status { color: #8b95ad; font-size: 14px; margin-top: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+            display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #ff5b5b; animation: blink 1.7s ease-in-out infinite; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+</style>
+</head>
+<body>
+<div class="container">
+  <canvas id="ring" width="300" height="300"></canvas>
+  <div class="name">{{BOT_NAME}}</div>
+  <div class="status"><span class="dot"></span> Taking notes</div>
+</div>
+<script>
+  // Faithful to AgentCall's ring renderer, locked to a calm grey ring that
+  // gently breathes (the template's "listening" look), drawn on canvas.
+  const canvas = document.getElementById('ring');
+  const ctx = canvas.getContext('2d');
+  const COLOR = [180, 180, 180];
+  let phase = 0;
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const cx = canvas.width / 2, cy = canvas.height / 2;
+    const [r, g, b] = COLOR;
+    const scale = 1 + Math.sin(phase) * 0.03;     // gentle breath
+    phase += 0.02;
+    const radius = 100 * scale, glow = 25;
+    const grad = ctx.createRadialGradient(cx, cy, radius - glow, cx, cy, radius + glow);
+    grad.addColorStop(0, `rgba(${r},${g},${b},0)`);
+    grad.addColorStop(0.4, `rgba(${r},${g},${b},0.15)`);
+    grad.addColorStop(0.6, `rgba(${r},${g},${b},0.15)`);
+    grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(cx, cy, radius + glow, 0, Math.PI * 2); ctx.fill();
+
+    ctx.strokeStyle = `rgb(${r},${g},${b})`;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = `rgb(${r},${g},${b})`;
+    ctx.shadowBlur = 20;
+    ctx.beginPath(); ctx.arc(cx, cy, radius, 0, Math.PI * 2); ctx.stroke();
+
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = `rgba(${r},${g},${b},0.3)`;
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, radius - 6, 0, Math.PI * 2); ctx.stroke();
+
+    requestAnimationFrame(draw);
+  }
+  draw();
+</script>
+</body>
+</html>
