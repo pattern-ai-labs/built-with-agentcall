@@ -1,0 +1,17 @@
+# Saved transcripts (the root-level patterns also catch notes written outside notes/)
+meeting-notes-*.md
+meeting-notes-*.txt
+meeting-notes-*.json
+notes/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Node
+node_modules/

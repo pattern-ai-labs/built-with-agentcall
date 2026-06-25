@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{BOT_NAME}} — live notes</title>
+<!--
+  The bot's video tile, "transcript" mode — AND the live dashboard at localhost.
+  Both are this one page. Polls the notetaker's own /transcript.json (tunnelled in
+  by the bridge). No meeting state, no audio. {{BOT_NAME}} and {{AVATAR_LINES}} are
+  filled in by the notetaker as the page is served. AgentCall design system.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --paper: #F3F0E8; --ink: #16170F; --ink-soft: #45443b; --muted: #6C6A60;
+    --line: #D8D3C4; --lime: #C8FF3A; --green: #4f6b0e;
+  }
+  html, body { height: 100%; }
+  body {
+    background: var(--paper); color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    height: 100%; display: flex; flex-direction: column; overflow: hidden; -webkit-font-smoothing: antialiased;
+  }
+  header {
+    display: flex; align-items: center; gap: 13px;
+    padding: clamp(14px, 3.2vh, 26px) clamp(20px, 4vw, 40px) 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .glyph { font-weight: 700; font-size: clamp(15px, 2.4vh, 21px); }
+  .name { font-weight: 700; font-size: clamp(21px, 3.8vh, 31px); letter-spacing: -.03em; color: var(--lime); background: #0E0F0D; border-radius: 9px; padding: 4px 14px; }
+  .live {
+    margin-left: auto; font-family: "JetBrains Mono", ui-monospace, monospace; font-weight: 500;
+    font-size: clamp(10px, 1.5vh, 12px); letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); display: flex; align-items: center; gap: 8px;
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--lime); animation: pulse 1.8s ease-out infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(200,255,58,.55); } 70% { box-shadow: 0 0 0 7px rgba(200,255,58,0); } 100% { box-shadow: 0 0 0 0 rgba(200,255,58,0); } }
+  #lines {
+    flex: 1; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
+    gap: clamp(8px, 1.7vh, 15px); padding: clamp(16px, 3vh, 26px) clamp(20px, 4vw, 40px) clamp(14px, 2.6vh, 22px);
+  }
+  .line { font-size: clamp(18px, 2.8vh, 24px); line-height: 1.42; color: var(--ink-soft); }
+  .line:last-child { color: var(--ink); }
+  .line.new { animation: rise .4s cubic-bezier(.16, 1, .3, 1); }
+  @keyframes rise { from { opacity: 0; transform: translateY(9px); } }
+  .who { font-weight: 700; }
+  .line.chat .who { color: var(--green); }     /* deep lime — readable on cream */
+  .line.chat .what::after { content: " · chat"; color: var(--muted); font-family: "JetBrains Mono", monospace; font-size: .68em; letter-spacing: .06em; }
+  .empty { margin: auto; color: var(--muted); font-size: clamp(16px, 2.4vh, 21px); display: flex; align-items: center; gap: 11px; }
+  footer {
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: clamp(9px, 1.3vh, 11px);
+    letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+    padding: 0 clamp(20px, 4vw, 40px) clamp(12px, 2.2vh, 18px);
+  }
+</style>
+</head>
+<body>
+  <header>
+    <span class="glyph">▣</span>
+    <span class="name">{{BOT_NAME}}</span>
+    <span class="live"><span class="dot"></span> taking notes</span>
+  </header>
+  <div id="lines"><div class="empty"><span class="dot"></span> listening…</div></div>
+  <footer>powered by agentcall.dev</footer>
+<script>
+  const N = {{AVATAR_LINES}};
+  const box = document.getElementById('lines');
+  const esc = (s) => (s || '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const key = (l) => l.time + '|' + l.speaker + '|' + l.kind + '|' + l.text;
+  let shown = [];   // keys currently rendered, in order
+  async function tick() {
+    let d;
+    try {
+      const r = await fetch('transcript.json', { cache: 'no-store' });
+      if (!r.ok) return;
+      d = await r.json();
+    } catch (e) { return; }
+    const lines = (d.lines || []).slice(-N);
+    const keys = lines.map(key);
+    // Unchanged since last poll → leave the DOM alone. This is what stops the flicker.
+    if (keys.length === shown.length && keys.every((k, i) => k === shown[i])) return;
+    if (!lines.length) { box.innerHTML = '<div class="empty"><span class="dot"></span> listening…</div>'; shown = []; return; }
+    const prev = new Set(shown);
+    box.innerHTML = lines.map(l =>
+      `<div class="line ${l.kind === 'chat' ? 'chat' : ''}${prev.has(key(l)) ? '' : ' new'}">` +
+      `<span class="who">${esc(l.speaker)}:</span> <span class="what">${esc(l.text)}</span></div>`
+    ).join('');
+    shown = keys;
+  }
+  setInterval(tick, 700);
+  tick();
+</script>
+</body>
+</html>

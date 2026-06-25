@@ -1,0 +1,4 @@
+{
+  "comment": "AgentCall's bridges are ES modules. This marks engine/ as ESM so they run, while notetaker.js stays CommonJS under node/package.json.",
+  "type": "module"
+}
