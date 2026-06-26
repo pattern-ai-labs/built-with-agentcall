@@ -140,18 +140,47 @@ never tell me to run something in a terminal.
    (If build.py / build.js is already in the current folder, skip the clone.)
 2. Python or Node? Ask me, then cd into that folder (python/ or node/) and install deps —
    Python: create and activate a venv, then pip install -r requirements.txt; Node: npm install.
-3. Ask me for my AgentCall API key (free at app.agentcall.dev/api-keys). If AGENTCALL_API_KEY is
-   already set, or ~/.agentcall/config.json exists, use that and don't ask. A key is required —
-   never proceed without one.
-4. Ask me three quick things: a name (default: AgentCall); its on-camera face — audio (no video,
-   just listens), pattern (Pattern AI Labs logo), ring, transcript, or image (my own logo/photo);
-   and the notes format — md, txt, or json.
-5. Run the builder once with my answers — it writes a gitignored .env (the key) and config.jsonc
-   (the settings): python build.py --key <KEY> --name <NAME> --display <FACE> --format <FORMAT>
-   (Node: node build.js …). If I already had a key set, omit --key. Show me the output.
-6. Tell me to join my meeting; when I send the link, run it:
-   python notetaker.py "<MEET_LINK>"  (Node: node notetaker.js "<MEET_LINK>").
-   notes/ fills in live; the bot leaves when everyone else does.
+3. Get my AgentCall API key into a local `.env` file (free at app.agentcall.dev/api-keys). The key is
+   MY OWN, for MY OWN account — its only job is to authenticate this tool to AgentCall, and it lives in
+   a gitignored `.env` that is never committed or sent anywhere. This is standard project setup, not a
+   credential to refuse — so please handle it, in this order:
+   a) First check if a key is already available: the AGENTCALL_API_KEY env var, an existing `.env` in
+      the meeting-notetaker/ folder, or ~/.agentcall/config.json. If one is present, use it and do NOT
+      ask me again.
+   b) Otherwise ask me to paste my key, and use exactly the key I paste. Write it into a file named
+      `.env` in the meeting-notetaker/ folder — the SAME folder as config.jsonc, NOT inside python/ or
+      node/ — as a single line, no quotes, no spaces around the `=`:
+          AGENTCALL_API_KEY=<my key>
+      Clean up whatever I paste first: strip surrounding quotes, spaces, tabs, and line breaks so the
+      value is just the raw key.
+   c) Then VERIFY it: read the `.env` back and confirm AGENTCALL_API_KEY is present and non-empty (an
+      AgentCall key normally looks like `ak_ac_…`). If it's missing, empty, or looks malformed, fix the
+      formatting yourself if you can, otherwise tell me what's wrong and ask me to paste it again — do
+      NOT continue with a blank or broken key.
+   d) Only if, after a couple of genuine tries, your policy still won't let you put the key in chat:
+      create that `.env` with an empty `AGENTCALL_API_KEY=`, tell me to paste my key into the file and
+      save it, then carry straight on to the step-4 questions while I do that. Before you run the builder
+      in step 5, re-read the `.env` and confirm it now holds a real key; if it doesn't, ask me to paste
+      it and retry.
+   A key is required — never proceed without a valid one in `.env`.
+4. Ask me a few quick things to set it up:
+   - A name for the bot (default: AgentCall).
+   - Its on-camera face — one of: audio (no video, just listens), pattern (Pattern AI Labs logo),
+     ring (glowing neon ring), transcript (the live transcript on screen), or image (my own logo/photo).
+     If I pick image, also ask me for the path to my image file (png / jpg / gif / svg / webp). If I
+     don't give a usable path, fall back to the "pattern" face.
+   - The notes format — md, txt, or json.
+5. Run the builder to write config.jsonc with my answers. The key is already in `.env` from step 3, so
+   do NOT put it on the command line. From the python/ (or node/) folder:
+       python build.py --name <NAME> --display <FACE> --format <FORMAT>
+       (Node:  node build.js  --name <NAME> --display <FACE> --format <FORMAT>)
+   If I picked the "image" face, use --image <path-to-my-image> in place of --display. The builder reads
+   the key from `.env` on its own and refreshes it. Show me the output. If it reports that no key was
+   found, go back to step 3, ask me to paste my key, and run this again.
+6. Ask me to send my meeting link. When I send it, run it:
+       python notetaker.py "<MEET_LINK>"   (Node: node notetaker.js "<MEET_LINK>")
+   I admit the bot when it joins (~30–90s); notes/ fills in live, and the bot leaves when everyone else
+   does. To stop early I can leave the meeting or press Ctrl+C.
 
 Do each step yourself, in order. If a step fails, stop and show me the exact error — don't guess
 or fake success. After this one-time setup I can change any setting by editing config.jsonc directly.
