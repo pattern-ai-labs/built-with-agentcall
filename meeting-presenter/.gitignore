@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+# generated decks (a converted document lands here)
+/decks/*/
+# agent voice-link scratch (heard/commands exchanged with the agent at runtime)
+/link/

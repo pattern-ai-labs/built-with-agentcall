@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>Presenter — remote</title>
+<style>
+  :root{ --paper:#F3F0E8; --ink:#16170F; --muted:#6C6A60; --line:#D8D3C4; --lime:#C8FF3A; --onlime:#0A0B07; --danger:#C0432F; --bezel:#16170F; }
+  *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",system-ui,-apple-system,sans-serif;-webkit-tap-highlight-color:transparent}
+  html,body{background:var(--paper);color:var(--ink);min-height:100%;overflow-x:hidden}
+  body{max-width:480px;margin:0 auto;padding:16px 14px 26px;display:flex;flex-direction:column;gap:14px}
+
+  header{display:flex;align-items:center;gap:9px}
+  header svg{width:24px;height:24px;flex:0 0 auto}
+  header .t{font-weight:800;font-size:17px;letter-spacing:-.3px;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .status{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:5px 10px;white-space:nowrap}
+  .status.live{color:var(--onlime);background:var(--lime);border-color:var(--lime)}
+
+  /* ── the TV: a screen showing the current slide ── */
+  .tv{background:var(--bezel);border-radius:18px;padding:10px 10px 12px;box-shadow:0 14px 34px rgba(0,0,0,.16)}
+  .screen{position:relative;width:100%;aspect-ratio:16/9;background:var(--paper);border-radius:9px;overflow:hidden}
+  .screen .pad{position:absolute;inset:0;padding:16px 18px;display:flex;flex-direction:column;overflow:hidden}
+  .screen .pad::before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:var(--lime)}
+  .screen .kick{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:9px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin-bottom:7px}
+  .screen h1{font-size:20px;font-weight:800;letter-spacing:-.5px;line-height:1.1;color:var(--ink)}
+  .screen ul{list-style:none;margin-top:11px;display:flex;flex-direction:column;gap:7px;min-height:0}
+  .screen li{font-size:12.5px;font-weight:500;line-height:1.25;display:flex;gap:8px;align-items:flex-start;color:var(--ink)}
+  .screen li .d{flex:0 0 auto;width:7px;height:7px;border-radius:50%;background:var(--lime);margin-top:5px}
+  .screen.cover .pad{align-items:center;justify-content:center;text-align:center}
+  .screen.cover h1{font-size:24px}
+  .screen.img{background:#0b0b0f}
+  .screen.img .pad{padding:0}
+  .screen.img .pad::before{display:none}
+  .screen.img img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain}
+  .screen.split .pad{flex-direction:row;gap:12px}
+  .screen.split .col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;justify-content:center}
+  .screen.split .fig{flex:1 1 0;min-width:0;display:flex;align-items:center;justify-content:center}
+  .screen.split .fig img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
+  .screen.standby .pad{align-items:center;justify-content:center;text-align:center;gap:8px}
+  .screen.standby .mk{color:var(--ink)}.screen.standby .mk svg{width:34px;height:34px}
+  .screen.standby b{font-size:16px;font-weight:800;color:var(--ink)}
+  .screen.standby span{font-size:11.5px;color:var(--muted);max-width:240px}
+  /* on-screen overlays */
+  .ov{position:absolute;top:9px;right:10px;display:flex;align-items:center;gap:6px;font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:10px;font-weight:600;letter-spacing:.04em;background:var(--lime);color:var(--onlime);border-radius:999px;padding:4px 9px}
+  .ov.idle{background:rgba(0,0,0,.06);color:var(--muted)}
+  .ov .live{width:6px;height:6px;border-radius:50%;background:var(--onlime)}
+  .ov.spk .live{animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(.65);opacity:.6}50%{transform:scale(1.1);opacity:1}}
+  .count{position:absolute;left:10px;top:9px;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:10px;
+    background:rgba(0,0,0,.55);color:#fff;border-radius:999px;padding:4px 9px}
+  .prog{height:5px;border-radius:999px;background:rgba(255,255,255,.16);margin:9px 4px 1px;overflow:hidden}
+  .prog>i{display:block;height:100%;background:var(--lime);border-radius:999px;transition:width .35s ease}
+
+  /* ── controls under the TV ── */
+  .row{display:flex;gap:10px}
+  button{cursor:pointer;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);border-radius:14px;
+    font-size:16px;font-weight:700;padding:15px 10px;flex:1;transition:transform .05s ease, background .15s ease;
+    display:flex;align-items:center;justify-content:center;gap:8px;min-height:56px}
+  button:active{transform:translateY(1px) scale(.99)}
+  button.go{background:var(--lime);color:var(--onlime);border-color:var(--lime)}
+  button.pause{background:var(--ink);color:var(--paper)}
+  button.ghost{border-color:var(--line);color:var(--muted);font-weight:600;min-height:46px;font-size:14px}
+  button.danger{border-color:var(--danger);color:var(--danger)}
+  .ico{font-size:19px;line-height:1}
+
+  details.slides{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  summary{list-style:none;cursor:pointer;padding:13px 15px;font-size:13.5px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:8px}
+  summary::-webkit-details-marker{display:none}
+  summary .cv{margin-left:auto;font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px}
+  .list{display:flex;flex-direction:column;gap:1px;background:var(--line);border-top:1px solid var(--line)}
+  .it{display:flex;align-items:center;gap:11px;background:var(--paper);padding:12px 15px;cursor:pointer}
+  .it:active{background:#ece8dd}
+  .it.cur{background:var(--ink);color:var(--paper)}.it.cur .n{color:var(--lime)}
+  .n{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:12px;color:var(--muted);min-width:22px}
+  .ti{font-size:14.5px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hint{font-size:12px;color:var(--muted);text-align:center;line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2.5"/><path d="M6.6 14.4 10.6 10.4"/><path d="M8 10.4h2.6V13"/></svg>
+  <div class="t" id="title">Presentation remote</div>
+  <div class="status" id="status">connecting…</div>
+</header>
+
+<!-- the TV: the slide the meeting is seeing, live -->
+<div class="tv">
+  <div class="screen" id="screen"></div>
+  <div class="prog"><i id="prog" style="width:0%"></i></div>
+</div>
+
+<!-- controls -->
+<div class="row">
+  <button class="ghost" id="prev" onclick="cmd('back')"><span class="ico">‹</span> Prev</button>
+  <button class="go" id="go" onclick="toggle()"><span class="ico" id="goico">▶</span> <span id="golabel">Start</span></button>
+  <button class="ghost" id="next" onclick="cmd('next')">Next <span class="ico">›</span></button>
+</div>
+<div class="row">
+  <button class="ghost" onclick="cmd('restart')"><span class="ico">⟲</span> Restart</button>
+  <button class="ghost danger" onclick="leave()"><span class="ico">⏻</span> Dismiss bot</button>
+</div>
+
+<details class="slides">
+  <summary>Jump to a slide <span class="cv" id="cv"></span></summary>
+  <div class="list" id="list"></div>
+</details>
+
+<div class="hint">The screen above is exactly what the meeting sees.</div>
+
+<script id="deckdata" type="application/json">__DECK_JSON__</script>
+<script>
+const DECK = (function(){ try{ return JSON.parse(document.getElementById("deckdata").textContent)||[]; }catch(_){ return []; } })();
+const TOTAL = DECK.length;
+const esc = s => (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const MARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2.5"/><path d="M6.6 14.4 10.6 10.4"/><path d="M8 10.4h2.6V13"/></svg>';
+
+let last = {slide:-1, total:TOTAL, status:"idle", deckTitle:"", speaking:false};
+let cur = -1, presenting = false, playing = false;
+let lastKey = "";   // avoid re-rendering the TV every poll
+
+const screen = document.getElementById("screen");
+
+function bullets(sl){
+  return (sl.bullets&&sl.bullets.length)
+    ? "<ul>"+sl.bullets.map(b=>`<li><span class="d"></span><span>${esc(b)}</span></li>`).join("")+"</ul>" : "";
+}
+function renderTV(s){
+  const key = s.status + "|" + (s.slide||0) + "|" + (s.deckTitle||"");
+  if(key === lastKey) return;       // nothing visual changed
+  lastKey = key;
+  if(s.status === "leaving"){
+    screen.className = "screen standby";
+    screen.innerHTML = `<div class="pad"><div class="mk">${MARK}</div><b>Leaving…</b><span>Dismissing the bot from the meeting.</span></div>`;
+    return;
+  }
+  if(s.status !== "presenting" || !TOTAL){
+    screen.className = "screen standby";
+    screen.innerHTML = `<div class="pad"><div class="mk">${MARK}</div><b>${esc(s.deckTitle||"Presenter")}</b>`+
+      `<span>In the meeting, ready. Press <b>Start</b> when you want it to present.</span></div>`;
+    return;
+  }
+  const i = Math.max(0, Math.min(TOTAL-1, s.slide||0));
+  const sl = DECK[i] || {};
+  const ov = `<div class="ov ${s.speaking?'spk':''}"><span class="live"></span>${s.speaking?'speaking':'presenting'}</div>`;
+  const kick = "";   // deck title already shown in the page header — keep the small TV uncluttered
+  const hasText = !!(sl.title || (sl.bullets&&sl.bullets.length));
+  if(sl.image && hasText){
+    screen.className = "screen split";
+    screen.innerHTML = `<div class="pad"><div class="col">${kick}<h1>${esc(sl.title)}</h1>${bullets(sl)}</div>`+
+      `<div class="fig"><img src="${sl.image}" alt=""></div></div>`+ov;
+  } else if(sl.image){
+    screen.className = "screen img";
+    screen.innerHTML = `<div class="pad"><img src="${sl.image}" alt=""></div>`+ov;
+  } else {
+    const cover = !(sl.bullets&&sl.bullets.length);
+    screen.className = "screen"+(cover?" cover":"");
+    screen.innerHTML = `<div class="pad">${kick}<h1>${esc(sl.title||"")}</h1>${bullets(sl)}</div>`+ov;
+  }
+}
+
+function buildList(){
+  document.getElementById("list").innerHTML = DECK.map((sl,i)=>
+    `<div class="it" id="it${i}" onclick="goSlide(${i})"><span class="n">${String(i+1).padStart(2,'0')}</span>`+
+    `<span class="ti">${esc(sl.title||('Slide '+(i+1)))}</span></div>`).join("");
+}
+function paint(s){
+  last = s; const total = s.total||TOTAL;
+  presenting = s.status === "presenting";
+  playing = !!s.playing;   // auto-advancing (Pause) vs just showing a slide / browsing (Start)
+  // header stays a fixed "Presentation remote"; the deck title shows on the standby screen instead
+  const st = document.getElementById("status");
+  st.textContent = s.status==="leaving" ? "leaving…" : presenting ? ("slide "+((s.slide||0)+1)+" / "+total)
+                 : (s.status==="idle" ? "standby" : (s.status||"…"));
+  st.classList.toggle("live", presenting);
+  document.getElementById("golabel").textContent = playing ? "Pause" : "Start";
+  document.getElementById("goico").textContent = playing ? "❚❚" : "▶";
+  document.getElementById("go").classList.toggle("go", !playing);
+  document.getElementById("go").classList.toggle("pause", playing);
+  document.getElementById("prog").style.width = presenting ? (((s.slide||0)+1)/total*100).toFixed(1)+"%" : "0%";
+  document.getElementById("cv").textContent = presenting ? (((s.slide||0)+1)+" / "+total) : (total+" slides");
+  renderTV(s);
+  const i = s.slide||0;
+  if(presenting){
+    if(cur>=0 && cur!==i){ const p=document.getElementById("it"+cur); if(p) p.classList.remove("cur"); }
+    const n=document.getElementById("it"+i); if(n){ n.classList.add("cur"); n.scrollIntoView({block:"nearest"}); }
+    cur=i;
+  } else if(cur>=0){ const p=document.getElementById("it"+cur); if(p) p.classList.remove("cur"); cur=-1; }
+}
+// Optimistic UI — reflect the press INSTANTLY, then HOLD that view until the server confirms the
+// move. We never snap back to a stale slide (the old rubber-band bug over the tunnel); we only
+// reconcile once the server's state matches what we asked for, or after a generous safety timeout.
+let pending = null, pendingUntil = 0;
+function matches(sv){
+  if(!pending) return true;
+  if(pending.status !== (sv.status||"idle")) return false;
+  return pending.status !== "presenting" || (sv.slide||0) === pending.slide;   // idle/leaving: status is enough
+}
+function optimistic(intent,n){
+  const s = Object.assign({}, last); s.total = s.total||TOTAL;
+  const go = sl => { s.status="presenting"; s.slide=Math.max(0,Math.min((s.total||1)-1,sl)); s.speaking=false; };
+  if(intent==="present") go(Math.max(0,s.slide||0));
+  else if(intent==="stop") s.status="idle";
+  else if(intent==="next") go((s.slide||0)+1);
+  else if(intent==="back") go((s.slide||0)-1);
+  else if(intent==="restart") go(0);
+  else if(intent==="goto") go((parseInt(n)||1)-1);
+  else if(intent==="leave") s.status="leaving";
+  s.playing = (intent==="present") ? 1 : 0;   // only Start auto-plays; nav/stop = browsing (Start button)
+  paint(s);
+  pending = {status:s.status, slide:s.slide||0};
+  pendingUntil = Date.now()+3500;
+}
+async function cmd(intent,n){
+  optimistic(intent,n);
+  const url = "cmd?intent="+encodeURIComponent(intent)+(n!=null?"&n="+encodeURIComponent(n):"");
+  try{ await fetch(url,{cache:"no-store"}); }catch(_){}
+}
+function toggle(){ cmd(playing?"stop":"present"); }
+function goSlide(i){ cmd("goto", i+1); }
+function leave(){ if(confirm("Dismiss the presenter bot and leave the meeting?")) cmd("leave"); }
+async function poll(){
+  try{
+    const r=await fetch("state.json",{cache:"no-store"}); if(!r.ok) return;
+    const sv = await r.json();
+    if(pending && !matches(sv) && Date.now() < pendingUntil) return;   // waiting for the server to catch up
+    pending = null; paint(sv);
+  }catch(_){}
+}
+buildList(); paint(last); poll(); setInterval(poll, 250);
+</script>
+</body>
+</html>
