@@ -112,7 +112,9 @@
 
 <script id="deckdata" type="application/json">__DECK_JSON__</script>
 <script>
-const DECK = (function(){ try{ return JSON.parse(document.getElementById("deckdata").textContent)||[]; }catch(_){ return []; } })();
+let deckLoadError = false;
+const DECK = (function(){ try{ return JSON.parse(document.getElementById("deckdata").textContent)||[]; }
+                          catch(err){ console.error("deck data failed to parse", err); deckLoadError = true; return []; } })();
 const TOTAL = DECK.length;
 const esc = s => (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
 const MARK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2.5"/><path d="M6.6 14.4 10.6 10.4"/><path d="M8 10.4h2.6V13"/></svg>';
@@ -134,6 +136,12 @@ function renderTV(s){
   if(s.status === "leaving"){
     screen.className = "screen standby";
     screen.innerHTML = `<div class="pad"><div class="mk">${MARK}</div><b>Leaving…</b><span>Dismissing the bot from the meeting.</span></div>`;
+    return;
+  }
+  if(deckLoadError){                 // distinguish a FAILED load from a genuinely empty deck
+    screen.className = "screen standby";
+    screen.innerHTML = `<div class="pad"><div class="mk">${MARK}</div><b>Deck failed to load</b>`+
+      `<span>The deck data didn't parse — check the present.py output. Don't press Start.</span></div>`;
     return;
   }
   if(s.status !== "presenting" || !TOTAL){
@@ -168,17 +176,17 @@ function buildList(){
 }
 function paint(s){
   last = s; const total = s.total||TOTAL;
-  presenting = s.status === "presenting";
-  playing = !!s.playing;   // auto-advancing (Pause) vs just showing a slide / browsing (Start)
+  presenting = s.status === "presenting";   // a slide is up (auto-playing OR browsing) → the button is Pause
+  playing = !!s.playing;                    // (kept for reference; button now keys off `presenting`)
   // header stays a fixed "Presentation remote"; the deck title shows on the standby screen instead
   const st = document.getElementById("status");
   st.textContent = s.status==="leaving" ? "leaving…" : presenting ? ("slide "+((s.slide||0)+1)+" / "+total)
                  : (s.status==="idle" ? "standby" : (s.status||"…"));
   st.classList.toggle("live", presenting);
-  document.getElementById("golabel").textContent = playing ? "Pause" : "Start";
-  document.getElementById("goico").textContent = playing ? "❚❚" : "▶";
-  document.getElementById("go").classList.toggle("go", !playing);
-  document.getElementById("go").classList.toggle("pause", playing);
+  document.getElementById("golabel").textContent = presenting ? "Pause" : "Start";
+  document.getElementById("goico").textContent = presenting ? "❚❚" : "▶";
+  document.getElementById("go").classList.toggle("go", !presenting);
+  document.getElementById("go").classList.toggle("pause", presenting);
   document.getElementById("prog").style.width = presenting ? (((s.slide||0)+1)/total*100).toFixed(1)+"%" : "0%";
   document.getElementById("cv").textContent = presenting ? (((s.slide||0)+1)+" / "+total) : (total+" slides");
   renderTV(s);
@@ -208,7 +216,7 @@ function optimistic(intent,n){
   else if(intent==="restart") go(0);
   else if(intent==="goto") go((parseInt(n)||1)-1);
   else if(intent==="leave") s.status="leaving";
-  s.playing = (intent==="present") ? 1 : 0;   // only Start auto-plays; nav/stop = browsing (Start button)
+  s.playing = (intent==="present") ? 1 : 0;
   paint(s);
   pending = {status:s.status, slide:s.slide||0};
   pendingUntil = Date.now()+3500;
@@ -218,18 +226,28 @@ async function cmd(intent,n){
   const url = "cmd?intent="+encodeURIComponent(intent)+(n!=null?"&n="+encodeURIComponent(n):"");
   try{ await fetch(url,{cache:"no-store"}); }catch(_){}
 }
-function toggle(){ cmd(playing?"stop":"present"); }
+function toggle(){ cmd(presenting?"stop":"present"); }   // showing a slide → Pause; standby → Start
 function goSlide(i){ cmd("goto", i+1); }
 function leave(){ if(confirm("Dismiss the presenter bot and leave the meeting?")) cmd("leave"); }
+// Lost-connection detection: if the presenter dies, don't keep showing a live-looking remote whose
+// buttons silently do nothing — flip the status pill to "disconnected" until the next good poll.
+let gotState = false, liveFails = 0, discon = false;
+function setDisconnected(){
+  discon = true;
+  const st = document.getElementById("status");
+  st.textContent = "disconnected"; st.classList.remove("live");
+}
 async function poll(){
   try{
-    const r=await fetch("state.json",{cache:"no-store"}); if(!r.ok) return;
+    const r=await fetch("state.json",{cache:"no-store"}); if(!r.ok) throw 0;
+    gotState = true; liveFails = 0;
     const sv = await r.json();
+    if(discon){ discon = false; lastKey = ""; }        // recovered → force a full repaint
     if(pending && !matches(sv) && Date.now() < pendingUntil) return;   // waiting for the server to catch up
     pending = null; paint(sv);
-  }catch(_){}
+  }catch(_){ if(gotState && ++liveFails === 8) setDisconnected(); }   // ≈1.2s of failures at 150ms
 }
-buildList(); paint(last); poll(); setInterval(poll, 250);
+buildList(); paint(last); poll(); setInterval(poll, 150);   // snappier remote → server state reconciliation
 </script>
 </body>
 </html>

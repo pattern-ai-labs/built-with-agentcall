@@ -96,8 +96,12 @@ class AgentCallAudio {
     this.partialPending = false;
     this.wordCount = 0;
     this.partialWindowTimer = null;
-    this.wordThreshold = 2;          // total spoken words in window to confirm
-    this.partialWindowMs = 2000;     // window length in ms
+    // Confirm threshold + window are tunable. Default 2 words / 2000ms suits noisy conversational
+    // bots. A PRESENTER wants to yield the floor the instant the user speaks, so it passes
+    // {wordThreshold:1, partialWindowMs:~900}: the first partial that carries a word cuts audio
+    // immediately, while wordless noise (a cough) still just pauses briefly and resumes.
+    this.wordThreshold = options.wordThreshold || 2;
+    this.partialWindowMs = options.partialWindowMs || 2000;
 
     // Chunk gate. Set true after _handleInterruption clears the queue;
     // makes playChunk drop incoming chunks until the next tts.started

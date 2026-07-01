@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Presenter</title>
+<!--
+  The bot's CAMERA tile in SCREENSHARE mode: a "presenter orb" (radial sunburst) + the narration voice.
+  AgentCall routes the bot's TTS audio to THIS page (the --ui-port page), so the audio player AND the
+  "hush" (instant pause/nav/leave/question cut) live here — the deck itself is on the screenshare surface
+  (slides.html). Both pages read the same /state.json. In avatar-tile mode this page is not used at all.
+  Visual: the Pattern radial sunburst, driven by OUR state (audio playback + status) not the raw voice WS.
+-->
+<style>
+  :root{
+    --ink:#0a0e14; --fg:#e8edf2; --dim:#7f8a99;
+    --lime:#c8ff3a;          /* brand accent — ready / listening */
+    --speak:#7cff9b;         /* narrating */
+    --warn:#f5b73d;          /* interrupted / attention */
+    --lost:#e0655e;          /* connection lost */
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background: radial-gradient(1200px 760px at 50% 34%, #121a24 0%, var(--ink) 72%);
+    color:var(--fg); font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    overflow:hidden; -webkit-font-smoothing:antialiased; transition:background .6s ease;
+  }
+  body.s-speaking{ background: radial-gradient(1200px 760px at 50% 34%, #0f2419 0%, var(--ink) 72%); }
+  body.s-leaving,
+  body.s-lost{ background: radial-gradient(1200px 760px at 50% 34%, #241512 0%, var(--ink) 72%); }
+  .stage{ text-align:center; padding:4vmin; display:flex; flex-direction:column; align-items:center; gap:3.4vmin; }
+
+  /* Radial sunburst — 16 equal spokes, anchored at the inner end. */
+  .radial{
+    position:relative; width:40vmin; height:40vmin; max-width:300px; max-height:300px;
+    display:flex; align-items:center; justify-content:center;
+    color:var(--lime); transition:color .5s ease; contain:layout style paint;
+  }
+  .radial[data-state="speaking"]    { color:var(--speak); }
+  .radial[data-state="interrupted"] { color:var(--warn); }
+  .radial[data-state="leaving"]     { color:var(--warn); }
+  .radial[data-state="lost"]        { color:var(--lost); }
+  .radial-inner{ position:relative; width:100%; height:100%; }
+  /* Each spoke is anchored at its BOTTOM (inner end) at the ring radius, then rotated to point out.
+     Offsets are in vmin (viewport units) so the ring is responsive AND correct — a % translate would
+     be relative to the bar's own size, which collapses the ring. */
+  .bar{
+    position:absolute; top:50%; left:50%; width:1.5vmin; height:8vmin;
+    border-radius:3px; background:currentColor; opacity:.4;
+    transform-origin:50% 100%; will-change:opacity,height;
+    animation: spoke-pulse var(--pp,2.4s) ease-in-out infinite;
+  }
+  @keyframes spoke-pulse{ 0%,100%{ opacity:var(--b,.5) } 50%{ opacity:var(--pk,.95) } }
+  @keyframes speaking-breath{ 0%,100%{ height:8vmin; opacity:.9 } 50%{ height:9.8vmin; opacity:1 } }
+  .radial[data-state="ready"] .bar,
+  .radial[data-state="listening"] .bar{ --b:.5; --pk:.95; --pp:2.4s; }
+  .radial[data-state="presenting"] .bar{ --b:.55; --pk:1; --pp:1.6s; }
+  .radial[data-state="speaking"] .bar{ animation:speaking-breath 1.05s ease-in-out infinite; }
+  .radial[data-state="interrupted"] .bar{ --b:.6; --pk:.6; }
+  .radial[data-state="leaving"] .bar{ --b:.35; --pk:.5; --pp:2s; }
+  .radial[data-state="lost"] .bar{ --b:.3; --pk:.3; }
+  /* soft glow behind the orb */
+  .radial::before{
+    content:""; position:absolute; width:60%; height:60%; border-radius:50%;
+    background:currentColor; filter:blur(38px); opacity:.14; transition:opacity .5s ease;
+  }
+  .radial[data-state="speaking"]::before{ opacity:.26; }
+
+  .name{ font-size:5vmin; font-weight:700; letter-spacing:-.02em; }
+  .status{ font-size:2.7vmin; color:var(--dim); display:inline-flex; align-items:center; gap:1.3vmin; margin-top:-1vmin; }
+  .dot{ width:1.5vmin; height:1.5vmin; border-radius:50%; background:var(--dim); transition:background .25s, box-shadow .25s; }
+  body.s-presenting .dot, body.s-speaking .dot{ background:var(--lime); box-shadow:0 0 12px var(--lime); }
+  body.s-speaking .dot{ background:var(--speak); box-shadow:0 0 12px var(--speak); }
+  body.s-lost .dot{ background:var(--lost); box-shadow:0 0 12px var(--lost); }
+  .ctx{ font-size:2.4vmin; color:var(--dim); max-width:86vw; line-height:1.5; }
+  .ctx b{ color:var(--fg); font-weight:600; }
+  .remote{ margin-top:1.6vmin; font-size:1.9vmin; opacity:.78; }
+  .remote .u{ display:inline-block; margin-top:.5vmin; font-family:ui-monospace,Menlo,Consolas,monospace;
+              font-size:.82em; word-break:break-all; opacity:.85; }
+</style>
+</head>
+<body class="s-ready">
+  <div class="stage">
+    <div class="radial" id="radial" data-state="ready"><div class="radial-inner" id="inner"></div></div>
+    <div class="name" id="name">Presenter</div>
+    <div class="status"><span class="dot"></span><span id="statusText">joining…</span></div>
+    <div class="ctx" id="ctx"></div>
+  </div>
+
+<script src="agentcall-audio.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+let player = null, lastHush = 0, hushTimer = null, lastKey = "";
+
+// Build the 16-spoke sunburst: each bar's bottom is placed at ring radius R (vmin) then rotated to
+// point outward. vmin offsets keep the ring responsive AND geometrically correct.
+const BARS = 16, R = 11;   // ring radius in vmin
+const inner = document.getElementById("inner"), radial = document.getElementById("radial");
+for(let i=0;i<BARS;i++){
+  const deg = (i/BARS)*360 - 90, rad = deg*Math.PI/180;
+  const cx = (Math.cos(rad)*R).toFixed(2), cy = (Math.sin(rad)*R).toFixed(2);
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  bar.style.transform = `translate(-50%,-100%) translate(${cx}vmin, ${cy}vmin) rotate(${deg+90}deg)`;
+  inner.appendChild(bar);
+}
+
+function esc(t){ return (t||"").replace(/</g,"&lt;"); }
+
+// Visual state = audio playback (truth for speaking) layered over the meeting status.
+let cur = { bot:"Presenter", status:"idle", speaking:false, slide:0, total:0, deckTitle:"", ctrl_url:"" };
+let audioPlaying = false, interrupted = false, down = false, voiceLost = false;
+
+function applyState(vs){
+  radial.dataset.state = vs;
+  document.body.className = "s-" + vs;
+}
+function refresh(){
+  // A dead state.json server (down) OR a dead narration socket (voiceLost) both mean "don't lie about
+  // Speaking". voiceLost is sticky — the audio WS doesn't reconnect — so a later state poll can't paper over it.
+  if(down || voiceLost){
+    applyState("lost");
+    document.getElementById("statusText").textContent = voiceLost ? "Voice link down" : "Lost connection to the presenter";
+    paintText(true); return;
+  }
+  const live = cur.status === "presenting";
+  const speaking = audioPlaying || (cur.speaking && live);
+  let vs, label;
+  if(cur.status === "leaving"){ vs="leaving"; label="Leaving…"; }
+  else if(interrupted && live){ vs="interrupted"; label="Listening"; }
+  else if(speaking){ vs="speaking"; label="Speaking"; }
+  else if(live){ vs="presenting"; label="Presenting"; }
+  else { vs="ready"; label="Ready"; }
+  applyState(vs);
+  document.getElementById("statusText").textContent = label;
+  paintText(false);
+}
+function paintText(isDown){
+  document.getElementById("name").textContent = cur.bot || "Presenter";
+  const live = cur.status === "presenting", total = cur.total||0, url = cur.ctrl_url||"";
+  document.getElementById("ctx").innerHTML = (live && total)
+    ? `<b>${esc(cur.deckTitle)}</b> · slide ${(cur.slide||0)+1} of ${total}`
+    : (cur.deckTitle ? `<b>${esc(cur.deckTitle)}</b>` : "")
+      + (!live && url ? `<div class="remote">Steer from your phone:<br><span class="u">${esc(url)}</span></div>` : "");
+}
+
+function render(s){
+  const key = (s.bot||"")+"|"+(s.status||"")+"|"+(!!s.speaking)+"|"+(s.slide||0)+"|"+(s.deckTitle||"")+"|"+(s.total||0)+"|"+(s.ctrl_url||"");
+  const changed = key !== lastKey; lastKey = key;
+  cur = { bot:s.bot||"Presenter", status:s.status||"idle", speaking:!!s.speaking,
+          slide:s.slide||0, total:s.total||0, deckTitle:s.deckTitle||"", ctrl_url:s.ctrl_url||"" };
+  if(changed) refresh();
+}
+
+let fails = 0, gotState = false, liveFails = 0;
+function connLost(){ down = true; refresh(); }
+async function poll(){
+  if(location.protocol === "file:") return;
+  try{
+    const r = await fetch("state.json",{cache:"no-store"});
+    if(!r.ok) throw 0;
+    gotState = true; fails = 0; liveFails = 0;
+    if(down){ down = false; lastKey = ""; }   // recovered → repaint the true status
+    const s = await r.json();
+    // Pause / manual nav / leave / a question bumps hush — cut the bot's current speech NOW.
+    // (Same path barge-in uses; the next narration re-opens the gate via tts.started. The 30s timer
+    // is a safety so a missed tts.started can never leave the bot muted forever.)
+    if(player && typeof s.hush === "number" && s.hush !== lastHush){
+      lastHush = s.hush;
+      try{ player.clear(); player.interrupted = true;
+        if(hushTimer) clearTimeout(hushTimer);
+        hushTimer = setTimeout(()=>{ if(player) player.interrupted = false; }, 30000);
+      }catch(_){}
+    }
+    render(s);
+  }catch(_){ fails++; if(gotState) liveFails++; if(gotState && liveFails === 25) connLost(); }
+}
+poll(); setInterval(poll, 80);   // this page owns the audio + hush — poll fast so a hush lands quickly
+
+// The narration audio is delivered to THIS camera page (screenshare mode); play it here so the meeting hears it.
+const wsURL = params.get("ws");
+if(wsURL && wsURL!=="local" && typeof AgentCallAudio!=="undefined"){
+  // The audio player is the source of truth for the "speaking" visual — it knows exactly when
+  // narration is actually flowing to the meeting. Presenter barge-in: yield on the first spoken word.
+  player = new AgentCallAudio({
+    wordThreshold: 1, partialWindowMs: 900,
+    onStateChange: (playing)=>{ audioPlaying = playing; if(playing) interrupted = false; refresh(); },
+    onSuspensionStart: ()=>{ interrupted = true; refresh(); },     // 1st partial → flip to Listening
+    onSuspensionEnd:   ()=>{ interrupted = false; refresh(); },    // false alarm → back to Speaking
+    onInterrupted:     ()=>{ interrupted = true; audioPlaying = false; refresh(); },
+  });
+  // If the socket dies, the meeting goes silent — surface it (sticky) instead of pulsing "Speaking".
+  const voiceDown = (why)=>{ voiceLost = true; audioPlaying = false; console.warn("audio:", why); refresh(); };
+  try{
+    const sock=new WebSocket(wsURL);
+    sock.onmessage=(e)=>{ try{ player.handleEvent(JSON.parse(e.data)); }
+                          catch(err){ console.warn("audio: dropped a malformed event", err); } };
+    sock.onerror=()=> voiceDown("voice socket error");
+    sock.onclose=()=> voiceDown("voice socket closed");
+  }catch(err){ voiceDown("voice WebSocket failed to open: " + err); }
+}
+refresh();
+</script>
+</body>
+</html>
