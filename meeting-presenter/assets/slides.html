@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Presenter</title>
+<style>
+  :root{ --paper:#F3F0E8; --ink:#16170F; --muted:#6C6A60; --line:#D8D3C4; --lime:#C8FF3A; --onlime:#0A0B07; }
+  *{margin:0;padding:0;box-sizing:border-box;font-family:"Segoe UI",system-ui,-apple-system,sans-serif}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--paper);color:var(--ink)}
+  #slide{position:fixed;inset:0;display:flex;flex-direction:column;padding:7vmin 8vmin 9vmin}
+  /* accent bar */
+  #slide::before{content:"";position:absolute;left:0;top:0;bottom:0;width:1.1vmin;background:var(--lime)}
+
+  .kicker{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:clamp(13px,2vmin,18px);
+    letter-spacing:.22em;text-transform:uppercase;color:var(--muted);margin-bottom:2.4vmin}
+  h1{font-size:clamp(30px,7.4vmin,72px);font-weight:800;letter-spacing:-1.5px;line-height:1.05;color:var(--ink)}
+  ul{list-style:none;margin-top:4.5vmin;display:flex;flex-direction:column;gap:2.6vmin}
+  li{font-size:clamp(18px,3.4vmin,34px);font-weight:500;line-height:1.3;display:flex;gap:2.2vmin;align-items:flex-start;
+     opacity:0;transform:translateY(14px)}
+  li.in{opacity:1;transform:none;transition:opacity .45s ease, transform .45s ease}
+  li .dot{flex:0 0 auto;width:1.4vmin;height:1.4vmin;min-width:11px;min-height:11px;border-radius:50%;
+    background:var(--lime);margin-top:1.4vmin}
+
+  /* title-only / cover slide */
+  #slide.cover{align-items:center;justify-content:center;text-align:center}
+  #slide.cover h1{font-size:clamp(38px,9vmin,92px)}
+  #slide.cover .kicker{margin-bottom:3vmin}
+
+  /* standby: the bot is in the meeting but idle, waiting for "go ahead" */
+  #slide.standby{align-items:center;justify-content:center;text-align:center;gap:2vmin}
+  #slide.standby .logo{font-size:7vmin;font-weight:800;color:var(--ink)}
+  #slide.standby h2{font-size:clamp(28px,5.4vmin,54px);font-weight:800;color:var(--ink);letter-spacing:-1px}
+  #slide.standby p{font-size:clamp(15px,2.4vmin,22px);color:var(--muted);max-width:760px}
+  #slide.standby b{color:var(--ink)}
+  #slide.standby .pill{margin-top:1vmin;font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:clamp(12px,1.8vmin,15px);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);
+    border:1px solid var(--line);border-radius:999px;padding:.7vmin 2vmin}
+
+  /* real slide image (e.g. a converted .pptx) shown full-bleed */
+  #slide.image{padding:0;background:#0b0b0f}
+  #slide.image::before{display:none}
+  #slide.image .slideimg{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#0b0b0f}
+  #slide.image footer{left:3vmin;right:3vmin;bottom:2vmin}
+  #slide.image .count,#slide.image .speak{color:rgba(255,255,255,.82)}
+  #slide.image .bar{background:rgba(255,255,255,.22)}
+  #slide.image .bar>i{background:#fff}
+
+  /* generated slide: agent bullets on the left, a figure pulled from the source on the right */
+  #slide.split{flex-direction:row;align-items:stretch;gap:5vmin}
+  #slide.split .col{flex:1 1 0;display:flex;flex-direction:column;justify-content:center;min-width:0}
+  #slide.split .col h1{font-size:clamp(26px,5.4vmin,52px)}
+  #slide.split .col ul{margin-top:3vmin}
+  #slide.split .figure{flex:1 1 0;display:flex;align-items:center;justify-content:center;min-width:0}
+  #slide.split .figure img{max-width:100%;max-height:74vh;object-fit:contain;border-radius:10px;
+    box-shadow:0 6px 30px rgba(0,0,0,.12)}
+
+  /* footer: progress + speaking */
+  footer{position:absolute;left:8vmin;right:8vmin;bottom:4vmin;display:flex;align-items:center;gap:2vmin}
+  .bar{flex:1;height:6px;border-radius:6px;background:rgba(0,0,0,.08);overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--ink);transition:width .4s ease}
+  .count{font-family:"JetBrains Mono",ui-monospace,monospace;font-size:clamp(12px,1.8vmin,15px);color:var(--muted);white-space:nowrap}
+  .speak{display:flex;align-items:center;gap:8px;font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:clamp(12px,1.8vmin,15px);color:var(--muted);white-space:nowrap;opacity:0;transition:opacity .3s}
+  .speak.on{opacity:1}
+  .speak .live{width:10px;height:10px;border-radius:50%;background:var(--lime);animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(.7);opacity:.6}50%{transform:scale(1.15);opacity:1}}
+
+  .wait{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2vmin;color:var(--muted)}
+  .wait .logo{font-size:6vmin;font-weight:800;color:var(--ink)}
+  /* AgentCall mark — "the agent in a meeting"; uses currentColor, sized by the parent's font-size */
+  .logo svg{width:1.05em;height:1.05em;display:block}
+
+  /* shown when there's no presenter server behind the page (opened as a file, or present.py not running) */
+  .help{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;gap:1.6vmin;padding:8vmin;color:var(--muted)}
+  .help .logo{font-size:6vmin;font-weight:800;color:var(--ink)}
+  .help h2{font-size:clamp(20px,3.4vmin,30px);color:var(--ink);font-weight:800}
+  .help p{max-width:700px;font-size:clamp(14px,2vmin,18px);line-height:1.55;margin:0}
+  .help pre{font-family:"JetBrains Mono",ui-monospace,monospace;background:rgba(0,0,0,.06);
+    padding:1.4vmin 2.2vmin;border-radius:10px;font-size:clamp(12px,1.9vmin,16px);color:var(--ink);margin:.6vmin 0}
+  .help code{font-family:"JetBrains Mono",ui-monospace,monospace;background:rgba(0,0,0,.06);padding:.12em .45em;border-radius:6px}
+
+  /* shown if the presenter goes away mid-presentation (server died) — so the page isn't silently frozen */
+  #netbanner{position:fixed;top:0;left:0;right:0;z-index:10;display:none;
+    background:var(--ink);color:var(--paper);font-family:"JetBrains Mono",ui-monospace,monospace;
+    font-size:clamp(12px,1.8vmin,15px);letter-spacing:.04em;text-align:center;padding:1vmin}
+  #netbanner.on{display:block}
+</style>
+</head>
+<body>
+<div id="slide"><div class="wait"><div class="logo"><svg class="acmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2.5"/><path d="M6.6 14.4 10.6 10.4"/><path d="M8 10.4h2.6V13"/></svg></div><div id="waitmsg">loading…</div></div></div>
+<div id="netbanner"></div>
+
+<!-- present.py injects the whole deck here (slides + images as data-URIs). Inlining the images as
+     TEXT is what makes them survive the bridge's text-only tunnel — a binary <img> fetch gets
+     corrupted (broken-image icon). We then poll only a tiny state for the current slide index. -->
+<script id="deckdata" type="application/json">__DECK_JSON__</script>
+
+<script src="agentcall-audio.js"></script>
+<script>
+const params = new URLSearchParams(location.search);
+const slideEl = document.getElementById("slide");
+let lastIdx = -1, lastStatus = "";
+
+// AgentCall mark — a camera with an up-right arrow ("the agent in a meeting"). currentColor.
+const MARK = '<svg class="acmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
+  + 'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2.5"/>'
+  + '<path d="M6.6 14.4 10.6 10.4"/><path d="M8 10.4h2.6V13"/></svg>';
+
+const DECK = (function(){ try { return JSON.parse(document.getElementById("deckdata").textContent) || []; }
+                          catch(_){ return []; } })();
+
+function esc(s){ return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+function renderStandby(s){
+  if(lastStatus === "idle") return;            // already showing standby — don't re-render every poll
+  lastStatus = "idle"; lastIdx = -1;
+  slideEl.className = "standby";
+  slideEl.innerHTML =
+    `<div class="logo">${MARK}</div>`+
+    `<h2>${esc(s.deckTitle||"Presenter")}</h2>`+
+    `<p>I'm here and ready to present. Say <b>“go ahead”</b> to begin — or <b>“stop”</b> any time.</p>`+
+    `<div class="pill">presenter · standby</div>`;
+}
+
+function render(s){
+  if(s.status === "idle"){ renderStandby(s); return; }
+  const slides = DECK;
+  if(!slides.length){ if(s.status === "ready"){ return; } document.getElementById("waitmsg").textContent = "no slides"; return; }
+  const i = Math.max(0, Math.min(slides.length-1, s.slide||0));
+  const sl = slides[i];
+  const changed = (i !== lastIdx) || (s.status !== lastStatus);
+  lastIdx = i; lastStatus = s.status;
+
+  if(changed){
+    const footer = `<footer><div class="bar"><i style="width:${((i+1)/slides.length*100).toFixed(1)}%"></i></div>`+
+            `<div class="count">${i+1} / ${slides.length}</div>`+
+            `<div class="speak" id="speak"><span class="live"></span> speaking</div></footer>`;
+    const hasText = !!(sl.title || (sl.bullets && sl.bullets.length));
+    const bulletsHtml = (sl.bullets && sl.bullets.length)
+      ? "<ul>" + sl.bullets.map(b=>`<li><span class="dot"></span><span>${esc(b)}</span></li>`).join("") + "</ul>" : "";
+    if(sl.image && hasText){
+      // generated slide: agent bullets beside a figure pulled from the source document
+      slideEl.className = "split";
+      slideEl.innerHTML =
+        `<div class="col"><div class="kicker">${esc(s.deckTitle||"")}</div><h1>${esc(sl.title)}</h1>${bulletsHtml}</div>`+
+        `<div class="figure"><img src="${sl.image}" alt=""></div>` + footer;
+      const lis = slideEl.querySelectorAll("li");
+      lis.forEach((li,k)=> setTimeout(()=>li.classList.add("in"), 120 + k*180));
+    } else if(sl.image){
+      // a real slide image (e.g. converted from PowerPoint) — show it full-bleed
+      slideEl.className = "image";
+      slideEl.innerHTML = `<img class="slideimg" src="${sl.image}" alt="">` + footer;
+    } else {
+      const cover = !(sl.bullets && sl.bullets.length);   // title-only slide = a cover
+      let html = `<div class="kicker">${cover ? esc(s.deckTitle||"presentation") : esc(s.deckTitle||"")}</div>`;
+      html += `<h1>${esc(sl.title)}</h1>` + bulletsHtml + footer;
+      slideEl.className = cover ? "cover" : "";
+      slideEl.innerHTML = html;
+      // stagger the bullets in
+      const lis = slideEl.querySelectorAll("li");
+      lis.forEach((li,k)=> setTimeout(()=>li.classList.add("in"), 120 + k*180));
+    }
+  }
+  const sp = document.getElementById("speak");
+  if(sp) sp.classList.toggle("on", !!s.speaking);
+}
+
+let fails = 0, gotState = false, fileHelp = false, liveFails = 0;
+const banner = document.getElementById("netbanner");
+function setBanner(msg){ if(banner){ banner.textContent = msg || ""; banner.classList.toggle("on", !!msg); } }
+function showHelp(reason){
+  slideEl.className = "";
+  slideEl.innerHTML =
+    `<div class="help">`+
+      `<div class="logo">${MARK}</div>`+
+      `<h2>Presenter slide canvas</h2>`+
+      `<p>${reason}</p>`+
+      `<p>This page is rendered live as the bot's camera — it needs <code>present.py</code> serving it. Start it with:</p>`+
+      `<pre>python present.py --local --deck decks/sample.json</pre>`+
+      `<p>…then open the <code>http://localhost:…</code> link it prints.</p>`+
+    `</div>`;
+}
+let player = null, lastHush = 0, hushTimer = null;   // audio player (assigned below); lastHush drives the "cut speech now" clear
+async function poll(){
+  // Opened straight off disk? There's no server to talk to — say so instead of spinning forever.
+  if(location.protocol === "file:"){
+    if(!fileHelp){ fileHelp = true; showHelp("This page was opened directly as a file, so there's no presenter behind it."); }
+    return;
+  }
+  try{
+    const r = await fetch("state.json",{cache:"no-store"});
+    if(r.ok){ gotState = true; fails = 0; liveFails = 0; setBanner("");
+      const s = await r.json();
+      // Pause / manual nav / leave / a question bumps `hush` — cut the bot's current speech NOW.
+      // (Same stop that barge-in uses; the next narration re-opens the gate via tts.started. The
+      // 30s timer is a safety so a missed tts.started can never leave the bot muted forever.)
+      if(player && typeof s.hush === "number" && s.hush !== lastHush){
+        lastHush = s.hush;
+        try{ player.clear(); player.interrupted = true;
+          if(hushTimer) clearTimeout(hushTimer);   // one safety timer for the LATEST hush, not one per hush
+          hushTimer = setTimeout(()=>{ if(player) player.interrupted = false; }, 30000);
+        }catch(_){}
+      }
+      render(s); return;
+    }
+    fails++; if(gotState) liveFails++;
+  }catch(_){ fails++; if(gotState) liveFails++; }
+  // ~2.4s of failed polls and we've never seen state → the server isn't there. Explain, don't hang.
+  if(!gotState && fails === 12){ showHelp("Couldn't reach the presenter server — is <code>present.py</code> running?"); }
+  // Lost the presenter mid-show (~5s of failures after it was working) → say so, don't freeze silently.
+  if(gotState && liveFails === 25){ setBanner("⚠ Lost connection to the presenter — the slide may be frozen."); }
+}
+poll(); setInterval(poll, 150);
+
+// play the bot's narration through this page (the bot's "voice"); no-op in --local
+const wsURL = params.get("ws");
+if(wsURL && wsURL!=="local" && typeof AgentCallAudio!=="undefined"){
+  player = new AgentCallAudio({});
+  try{ const sock=new WebSocket(wsURL); sock.onmessage=(e)=>{ try{player.handleEvent(JSON.parse(e.data));}catch(_){} }; }catch(_){}
+}
+</script>
+</body>
+</html>

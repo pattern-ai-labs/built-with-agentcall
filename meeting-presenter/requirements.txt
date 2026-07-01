@@ -1,0 +1,17 @@
+# Core bridge (joining the meeting, voice, on-camera webpage)
+aiohttp>=3.9
+websockets>=12.0
+
+# Document -> slides conversion — all permissive licenses, all pip wheels, NO system binaries.
+pypdfium2>=4         # PDF/page -> image  (Chrome's PDFium; Apache/BSD; wheel bundles the native lib)
+pikepdf>=8           # extract a PDF's own embedded images, losslessly  (MPL-2.0; bundles QPDF)
+pillow>=10           # image handling/saving  (HPND, permissive)
+python-pptx>=1.0     # PowerPoint text, speaker notes & media
+python-docx>=1.1     # Word text, headings & embedded media
+pywin32>=306 ; sys_platform == "win32"   # optional fast path: render .pptx/.docx via installed MS Office
+
+# Cross-platform notes:
+#  - PDFs and topic-generated decks need ZERO system binaries on Windows/macOS/Linux.
+#  - To render a real .pptx/.docx to images WITHOUT Microsoft Office, install LibreOffice
+#    (the only optional system dependency). If it's absent, the converter degrades to a
+#    text + extracted-images deck instead of failing.

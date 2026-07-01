@@ -13,6 +13,7 @@ Every project here is a **self-contained folder** you can clone, run, and build 
 | Project | What it does | Stack |
 |---|---|---|
 | **[meeting-notetaker](meeting-notetaker)** | A silent bot that joins your call, writes the whole transcript live, and leaves when everyone else does. | Python · Node |
+| **[meeting-presenter](meeting-presenter)** | A skill that turns your AI agent into a presenter: it joins your call and delivers your slides on its camera, narrated aloud and advancing on their own, and you steer it by voice or a control page. | Python |
 
 *More coming — yours could be next.*
 

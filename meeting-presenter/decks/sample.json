@@ -1,0 +1,41 @@
+{
+  "title": "Built with AgentCall",
+  "slides": [
+    {
+      "title": "Meet your AI presenter",
+      "notes": "Hi everyone! I'm an A.I. presenter, and I'm going to walk you through this deck myself. I joined this call, I'm showing the slides on my camera, and I'm narrating each one in my own voice. Let's dive in."
+    },
+    {
+      "title": "What's happening here?",
+      "bullets": [
+        "An AI agent joined your meeting",
+        "The slides are its camera feed",
+        "It narrates each slide out loud",
+        "It advances on its own — hands free"
+      ],
+      "notes": "So what's going on? I'm an agent that joined your video call. The slides you're looking at are my camera. I'm speaking the narration for each one, and when I finish talking, I move to the next slide by myself. No clicker, no screen-share."
+    },
+    {
+      "title": "Powered by AgentCall",
+      "bullets": [
+        "One API to put an agent in any call",
+        "Voice, on-camera video, transcription",
+        "Works on Meet, Zoom, and Teams"
+      ],
+      "notes": "All of this runs on AgentCall, a single A.P.I. that drops an A.I. agent into a live meeting with voice, an on-camera presence, and real-time transcription. The same way across Google Meet, Zoom, and Microsoft Teams."
+    },
+    {
+      "title": "Make it your own",
+      "bullets": [
+        "Write a deck as a simple JSON file",
+        "Each slide: a title, bullets, and what to say",
+        "Point it at a meeting link — and go"
+      ],
+      "notes": "Making your own presentation is simple. You write a deck as a small JSON file. For each slide, you give a title, a few bullet points, and the words you want me to say. Then you point me at a meeting link, and I deliver the whole thing."
+    },
+    {
+      "title": "Thanks for watching!",
+      "notes": "And that's how an A.I. agent can deliver a whole presentation, on its own, right inside your meeting. Thanks for watching, and go build your own."
+    }
+  ]
+}
