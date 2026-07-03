@@ -3,17 +3,17 @@
   "slides": [
     {
       "title": "Meet your AI presenter",
-      "notes": "Hi everyone! I'm an A.I. presenter, and I'm going to walk you through this deck myself. I joined this call, I'm showing the slides on my camera, and I'm narrating each one in my own voice. Let's dive in."
+      "notes": "Hi everyone! I'm an A.I. presenter, and I'm going to walk you through this deck myself. I joined this call, I'm putting the slides up on screen myself, and I'm narrating each one in my own voice. Let's dive in."
     },
     {
       "title": "What's happening here?",
       "bullets": [
         "An AI agent joined your meeting",
-        "The slides are its camera feed",
+        "It's showing these slides itself",
         "It narrates each slide out loud",
         "It advances on its own — hands free"
       ],
-      "notes": "So what's going on? I'm an agent that joined your video call. The slides you're looking at are my camera. I'm speaking the narration for each one, and when I finish talking, I move to the next slide by myself. No clicker, no screen-share."
+      "notes": "So what's going on? I'm an agent that joined your video call. The slides you're looking at — I'm showing them myself. I'm speaking the narration for each one, and when I finish talking, I move to the next slide by myself. Nobody's holding a clicker."
     },
     {
       "title": "Powered by AgentCall",

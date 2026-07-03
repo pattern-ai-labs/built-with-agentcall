@@ -101,7 +101,7 @@
 <script>
 const params = new URLSearchParams(location.search);
 const slideEl = document.getElementById("slide");
-let lastIdx = -1, lastStatus = "";
+let lastIdx = -1, lastStatus = "", lastCtrlUrl = "";
 
 // AgentCall mark — a camera with an up-right arrow ("the agent in a meeting"). currentColor.
 const MARK = '<svg class="acmark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" '
@@ -109,26 +109,36 @@ const MARK = '<svg class="acmark" viewBox="0 0 24 24" fill="none" stroke="curren
   + '<path d="m22 8-6 4 6 4V8Z"/><rect x="2" y="6" width="14" height="12" rx="2.5"/>'
   + '<path d="M6.6 14.4 10.6 10.4"/><path d="M8 10.4h2.6V13"/></svg>';
 
+let deckLoadError = false;
 const DECK = (function(){ try { return JSON.parse(document.getElementById("deckdata").textContent) || []; }
-                          catch(_){ return []; } })();
+                          catch(err){ console.error("deck data failed to parse", err); deckLoadError = true; return []; } })();
 
 function esc(s){ return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
 
 function renderStandby(s){
-  if(lastStatus === "idle") return;            // already showing standby — don't re-render every poll
-  lastStatus = "idle"; lastIdx = -1;
+  const url = s.ctrl_url || "";
+  // re-render when the remote URL first arrives (it comes AFTER standby is first shown)
+  if(lastStatus === "idle" && lastCtrlUrl === url) return;
+  lastStatus = "idle"; lastIdx = -1; lastCtrlUrl = url;
   slideEl.className = "standby";
   slideEl.innerHTML =
     `<div class="logo">${MARK}</div>`+
     `<h2>${esc(s.deckTitle||"Presenter")}</h2>`+
     `<p>I'm here and ready to present. Say <b>“go ahead”</b> to begin — or <b>“stop”</b> any time.</p>`+
+    (url ? `<div style="margin-top:20px;font-size:.9em;opacity:.9">Steer it from your phone — open:<br>`+
+           `<span style="display:inline-block;margin-top:6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82em;word-break:break-all;opacity:.8">${esc(url)}</span></div>` : "")+
     `<div class="pill">presenter · standby</div>`;
 }
 
 function render(s){
   if(s.status === "idle"){ renderStandby(s); return; }
   const slides = DECK;
-  if(!slides.length){ if(s.status === "ready"){ return; } document.getElementById("waitmsg").textContent = "no slides"; return; }
+  if(!slides.length){
+    if(deckLoadError){ document.getElementById("waitmsg").textContent = "deck failed to load";
+      setBanner("⚠ The deck data didn't load — check present.py output."); return; }
+    if(s.status === "ready"){ return; }
+    document.getElementById("waitmsg").textContent = "no slides"; return;
+  }
   const i = Math.max(0, Math.min(slides.length-1, s.slide||0));
   const sl = slides[i];
   const changed = (i !== lastIdx) || (s.status !== lastStatus);
@@ -146,13 +156,13 @@ function render(s){
       slideEl.className = "split";
       slideEl.innerHTML =
         `<div class="col"><div class="kicker">${esc(s.deckTitle||"")}</div><h1>${esc(sl.title)}</h1>${bulletsHtml}</div>`+
-        `<div class="figure"><img src="${sl.image}" alt=""></div>` + footer;
+        `<div class="figure"><img src="${sl.image}" alt="" onerror="setBanner('⚠ A slide image failed to load — the deck data may be corrupted.')"></div>` + footer;
       const lis = slideEl.querySelectorAll("li");
       lis.forEach((li,k)=> setTimeout(()=>li.classList.add("in"), 120 + k*180));
     } else if(sl.image){
       // a real slide image (e.g. converted from PowerPoint) — show it full-bleed
       slideEl.className = "image";
-      slideEl.innerHTML = `<img class="slideimg" src="${sl.image}" alt="">` + footer;
+      slideEl.innerHTML = `<img class="slideimg" src="${sl.image}" alt="" onerror="setBanner('⚠ This slide image failed to load — the deck data may be corrupted.')">` + footer;
     } else {
       const cover = !(sl.bullets && sl.bullets.length);   // title-only slide = a cover
       let html = `<div class="kicker">${cover ? esc(s.deckTitle||"presentation") : esc(s.deckTitle||"")}</div>`;
@@ -179,11 +189,11 @@ function showHelp(reason){
       `<h2>Presenter slide canvas</h2>`+
       `<p>${reason}</p>`+
       `<p>This page is rendered live as the bot's camera — it needs <code>present.py</code> serving it. Start it with:</p>`+
-      `<pre>python present.py --local --deck decks/sample.json</pre>`+
+      `<pre>python scripts/present.py --local --deck decks/sample.json</pre>`+
       `<p>…then open the <code>http://localhost:…</code> link it prints.</p>`+
     `</div>`;
 }
-let player = null, lastHush = 0, hushTimer = null;   // audio player (assigned below); lastHush drives the "cut speech now" clear
+let player = null, lastHush = 0, hushTimer = null, voiceLinkDown = false;   // audio player (assigned below); lastHush drives the "cut speech now" clear. voiceLinkDown is sticky (no WS reconnect).
 async function poll(){
   // Opened straight off disk? There's no server to talk to — say so instead of spinning forever.
   if(location.protocol === "file:"){
@@ -192,7 +202,8 @@ async function poll(){
   }
   try{
     const r = await fetch("state.json",{cache:"no-store"});
-    if(r.ok){ gotState = true; fails = 0; liveFails = 0; setBanner("");
+    if(r.ok){ gotState = true; fails = 0; liveFails = 0;
+      setBanner(voiceLinkDown ? "⚠ Presenter voice link is down — narration audio may be silent." : "");   // don't paper over a dead audio socket
       const s = await r.json();
       // Pause / manual nav / leave / a question bumps `hush` — cut the bot's current speech NOW.
       // (Same stop that barge-in uses; the next narration re-opens the gate via tts.started. The
@@ -213,13 +224,27 @@ async function poll(){
   // Lost the presenter mid-show (~5s of failures after it was working) → say so, don't freeze silently.
   if(gotState && liveFails === 25){ setBanner("⚠ Lost connection to the presenter — the slide may be frozen."); }
 }
-poll(); setInterval(poll, 150);
+poll(); setInterval(poll, 80);   // fast hush pickup (also carries audio in avatar mode)
 
-// play the bot's narration through this page (the bot's "voice"); no-op in --local
+// Play the bot's narration through this page (the bot's "voice"); no-op in --local.
+// AUDIO_ON is false when this page is the MUTE screenshare surface — then the audio + hush live on the
+// separate avatar/camera page instead, and this page just renders slides.
+const AUDIO_ON = __AUDIO_ON__;
 const wsURL = params.get("ws");
-if(wsURL && wsURL!=="local" && typeof AgentCallAudio!=="undefined"){
-  player = new AgentCallAudio({});
-  try{ const sock=new WebSocket(wsURL); sock.onmessage=(e)=>{ try{player.handleEvent(JSON.parse(e.data));}catch(_){} }; }catch(_){}
+if(AUDIO_ON && wsURL && wsURL!=="local" && typeof AgentCallAudio!=="undefined"){
+  player = new AgentCallAudio({ wordThreshold: 1, partialWindowMs: 900 });   // presenter: yield fast when the user speaks
+  // The bot's VOICE rides this socket. If it fails to open, errors, or drops mid-show, the bot goes
+  // silent — so never swallow it: surface the loss in the banner instead of clicking through mutely.
+  try{
+    const sock=new WebSocket(wsURL);
+    sock.onmessage=(e)=>{ try{ player.handleEvent(JSON.parse(e.data)); }
+                          catch(err){ console.warn("audio: dropped a malformed event", err); } };
+    sock.onerror=()=>{ voiceLinkDown = true; setBanner("⚠ Presenter voice link error — narration audio may be down."); };
+    sock.onclose=()=>{ voiceLinkDown = true; setBanner("⚠ Presenter voice link closed — narration audio is down."); };
+  }catch(err){
+    console.error("audio: couldn't open the voice WebSocket", err);
+    setBanner("⚠ Couldn't open the presenter voice link — narration audio is down.");
+  }
 }
 </script>
 </body>
