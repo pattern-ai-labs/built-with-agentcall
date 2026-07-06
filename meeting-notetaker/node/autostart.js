@@ -99,7 +99,10 @@ function linuxEnable() {
     `[Service]\nWorkingDirectory=${HERE}\nExecStart=${NODE} ${AUTOJOIN} run\nRestart=on-failure\n\n` +
     "[Install]\nWantedBy=default.target\n");
   spawnSync("systemctl", ["--user", "daemon-reload"]);
-  const r = spawnSync("systemctl", ["--user", "enable", "--now", LABEL + ".service"], { encoding: "utf-8" });
+  // enable registers it for login; restart starts it now — or bounces it if it's
+  // already running, so `start`/`restart` behave the same on every OS.
+  spawnSync("systemctl", ["--user", "enable", LABEL + ".service"]);
+  const r = spawnSync("systemctl", ["--user", "restart", LABEL + ".service"], { encoding: "utf-8" });
   console.log(`  ✓ installed a systemd --user service: ${unit}`);
   if (r.status !== 0) console.log(`  (systemctl said: ${(r.stderr || r.stdout || "").trim()})`);
   console.log("  Tip: to run it even before you log in, enable lingering once:");

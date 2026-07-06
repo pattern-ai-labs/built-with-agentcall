@@ -56,7 +56,7 @@ use one — Claude Code, Cursor, Gemini CLI… — it can do the whole setup for
 <p align="center"><sub>▶ <b><a href="https://youtu.be/wINCodm_af0">Watch the 2-minute setup</a></b> — clone → key → build → run</sub></p>
 
 Two ways in — pick one:
-- 🖥️ **Run it yourself** — the four steps below.
+- 🖥️ **Run it yourself** — the four steps below (plus an optional autopilot step).
 - 🤖 **Have an AI assistant do it** — on Claude Code, Cursor, Gemini CLI, or similar? [One prompt sets it all up.](#build-it-with-one-prompt)
 
 **1. Get it on your computer.**
@@ -101,7 +101,8 @@ python build.py        # or:  npm run build
 
 It asks a few quick things — your free [AgentCall key](https://app.agentcall.dev/api-keys) first (it
 writes a gitignored `.env`), a **name**, a **face on camera**, and the **notes format** — then fills in
-your `config.jsonc`. **You built it.**
+your `config.jsonc`. It also offers to **connect your calendar** so it joins meetings by itself (you can
+skip that and do it any time — see step 5). **You built it.**
 
 > Change anything later by editing [`config.jsonc`](config.jsonc) directly — the build is just for first-time setup.
 
@@ -114,6 +115,17 @@ python notetaker.py "https://meet.google.com/your-link"
 
 Admit the bot (~30–90s), talk, drop a chat message — and watch `notes/` fill in live, plus the page at
 **http://localhost:8080**. To stop: **leave the meeting** (the bot follows) or press **Ctrl+C**.
+
+**5. Put it on autopilot** *(optional)* — connect a calendar once, and it joins your meetings by itself:
+
+```bash
+python autojoin.py connect     # or:  node autojoin.js connect
+```
+
+Paste your calendar's **secret iCal link** when it asks (it shows you exactly where to find it), say **y**
+to turn it on, and you're done — it's watching now, and it starts itself whenever you log in. One command
+turns it off: `python autojoin.py stop`. All the details — every command, privacy, tuning — live in
+**[Auto-join from your calendar](#auto-join-from-your-calendar)**.
 
 ---
 

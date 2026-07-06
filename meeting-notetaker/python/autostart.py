@@ -143,7 +143,10 @@ def _linux_enable():
     with open(unit, "w", encoding="utf-8") as f:
         f.write(content)
     subprocess.run(["systemctl", "--user", "daemon-reload"], capture_output=True)
-    r = subprocess.run(["systemctl", "--user", "enable", "--now", LABEL + ".service"],
+    # enable registers it for login; restart starts it now — or bounces it if it's
+    # already running, so `start`/`restart` behave the same on every OS.
+    subprocess.run(["systemctl", "--user", "enable", LABEL + ".service"], capture_output=True)
+    r = subprocess.run(["systemctl", "--user", "restart", LABEL + ".service"],
                        capture_output=True, text=True)
     print("  " + "✓" + f" installed a systemd --user service: {unit}")
     if r.returncode != 0:
