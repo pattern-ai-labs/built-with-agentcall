@@ -353,10 +353,63 @@ def _next_steps():
     print("    " + col(DIM, "·") + " name, face, or notes format  " + col(DIM, "→") + "  edit " + col(BOLD, "config.jsonc"))
     print("    " + col(DIM, "·") + " your AgentCall key  " + col(DIM, "→") + "  edit " + col(BOLD, ".env"))
     print("    " + col(DIM, "·") + " your own camera tile  " + col(DIM, "→") + "  drop an image in " + col(BOLD, "avatars/") + " and set " + col(BOLD, "DISPLAY"))
+    print("    " + col(DIM, "·") + " auto-join from your calendar  " + col(DIM, "→") + "  " + col(BOLD, "python autojoin.py connect"))
     print()
 
 
-def assemble(name, display, fmt, key, reused=False):
+def _connect_interactive():
+    """After the notetaker is built, offer to connect a calendar so it auto-joins."""
+    import connect_calendar as cc
+    if ask("Auto-join meetings from your calendar?",
+           "it'll join them by itself · y/N", "n").lower() not in ("y", "yes"):
+        return
+    print()
+    for line in cc.WALKTHROUGH.splitlines():
+        print(("  " + col(DIM, line)) if line.strip() else "")
+    print()
+    while True:
+        url = ask("Paste your secret iCal link", "read-only · Enter to skip")
+        if not url:
+            print("  " + col(DIM, "Skipped — connect later with: python autojoin.py connect"))
+            return
+        print("  " + col(DIM, "checking that link…"))
+        events, err = cc.validate(url)
+        if err:
+            print("   " + col(BOLD, "✗") + " " + err)
+            continue
+        break
+    cc.save_ics_url(url)
+    cc.set_auto_join(True)
+    print()
+    cc.summarize(events)
+    if ask("Start it automatically when you log in?", "y/N", "n").lower() in ("y", "yes"):
+        try:
+            import autostart
+            autostart.enable()
+        except Exception as e:
+            print(f"  (couldn't set up start-on-login: {e})")
+    else:
+        print("  " + col(DIM, "start it any time with: python autojoin.py start"))
+
+
+def _connect_flags(ics_url, autostart_flag):
+    import connect_calendar as cc
+    events, err = cc.validate(ics_url)
+    if err:
+        print("   calendar not connected: " + err)
+        return
+    cc.save_ics_url(ics_url)
+    cc.set_auto_join(True)
+    cc.summarize(events)
+    if autostart_flag:
+        try:
+            import autostart
+            autostart.enable()
+        except Exception as e:
+            print(f"  (couldn't set up start-on-login: {e})")
+
+
+def assemble(name, display, fmt, key, reused=False, connect=None):
     print()
     print("  " + col(BOLD, f"Building {name}") + col(DIM, " …"))
     print("   " + col(BOLD, "✓") + " wired the AgentCall listener")
@@ -365,6 +418,9 @@ def assemble(name, display, fmt, key, reused=False):
     print("   " + col(BOLD, "✓") + " wrote config.jsonc")
     write_env(key)
     print("   " + col(BOLD, "✓") + (" copied your AgentCall key into .env" if reused else " saved your key to .env"))
+
+    if connect:
+        connect()
 
     _done_card(name)
     _next_steps()
@@ -379,9 +435,12 @@ def main():
     parser.add_argument("--display", help="audio | pattern | ring | transcript | <your avatar name>")
     parser.add_argument("--format", choices=["md", "txt", "json"])
     parser.add_argument("--image", help="path to a logo/photo to use as the avatar")
+    parser.add_argument("--calendar-ics", help="connect a calendar: your secret iCal URL (turns on auto-join)")
+    parser.add_argument("--autostart", action="store_true",
+                        help="with --calendar-ics: also start auto-join when you log in")
     args = parser.parse_args()
 
-    has_flags = any([args.key, args.name, args.display, args.format, args.image])
+    has_flags = any([args.key, args.name, args.display, args.format, args.image, args.calendar_ics])
 
     if not has_flags and not sys.stdin.isatty():
         print("This builder asks you questions, but there's no terminal here")
@@ -436,7 +495,11 @@ def main():
         print("  or set AGENTCALL_API_KEY, or add it to .env, then build again.")
         sys.exit(1)
 
-    assemble(name, display, fmt, effective, reused=(not key and bool(found)))
+    if has_flags:
+        connect = (lambda: _connect_flags(args.calendar_ics, args.autostart)) if args.calendar_ics else None
+    else:
+        connect = _connect_interactive
+    assemble(name, display, fmt, effective, reused=(not key and bool(found)), connect=connect)
 
 
 if __name__ == "__main__":

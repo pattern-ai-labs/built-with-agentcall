@@ -2,3 +2,8 @@
 # These two are for the bundled bridge (engine/bridge.py), AgentCall's transport.
 aiohttp>=3.9
 websockets>=12.0
+
+# For calendar auto-join (autojoin.py): lets Python read meeting time zones
+# correctly on systems that ship no IANA tz database (notably Windows), so a
+# meeting never fires an hour off across a daylight-saving change. Tiny, pure data.
+tzdata>=2024.1

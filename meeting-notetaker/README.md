@@ -25,6 +25,7 @@ Python **or** Node, one config file. Powered by **[AgentCall](https://agentcall.
 - **Shows it live** — in your browser at `localhost:8080`, or right on screen in the call (the transcript tile).
 - **On-camera tile** (optional): customize the avatar it shows in the meeting — a logo, a pattern, the live transcript, or nothing at all.
 - **Leaves** the moment the last human leaves — never lingers in an empty room.
+- **Auto-joins from your calendar** *(optional)* — connect a calendar once and it joins your meetings on its own, even starting itself when you turn on your computer. [See below.](#auto-join-from-your-calendar)
 
 <p align="center">
   <img src="assets/meetview.png" width="49%" alt="The notetaker bot sitting in your meeting" />
@@ -181,6 +182,20 @@ never tell me to run something in a terminal.
        python notetaker.py "<MEET_LINK>"   (Node: node notetaker.js "<MEET_LINK>")
    I admit the bot when it joins (~30–90s); notes/ fills in live, and the bot leaves when everyone else
    does. To stop early I can leave the meeting or press Ctrl+C.
+7. Optional — offer calendar auto-join: "Want it to join your calendar meetings automatically?" If I say
+   no, you're done. If I say yes, my calendar's secret iCal link is a private credential (like the API
+   key), so it must NEVER appear in chat and you must NEVER print or read its value back:
+   a) Append a line `CALENDAR_ICS_URL=` (empty) to the same `.env` from step 3, and ask me to open that
+      file and paste my link after the `=` myself, then save. Where I find it — Google Calendar (on a
+      computer): Settings -> Settings for my calendars -> my calendar -> "Integrate calendar" -> copy
+      "Secret address in iCal format" (ends in .ics). Outlook: Calendar settings -> Shared calendars ->
+      Publish a calendar. Apple iCloud: share as Public Calendar (webcal:// link).
+   b) When I say it's saved, check `.env` has a non-empty CALENDAR_ICS_URL (existence only — do not echo
+      it), then run:  python autojoin.py connect --from-env   (Node: node autojoin.js connect --from-env)
+      and show me its output — it validates the link and lists my upcoming meetings.
+   c) Ask: start it now, or also start automatically at login? Run `python autojoin.py start` or
+      `python autojoin.py enable` accordingly, then `python autojoin.py status` to show me it's running.
+      I can stop it any time with `python autojoin.py stop` (add `--all` to pull bots out of meetings too).
 
 Do each step yourself, in order. If a step fails, stop and show me the exact error — don't guess
 or fake success. After this one-time setup I can change any setting by editing config.jsonc directly.
@@ -204,6 +219,69 @@ node   notetaker.js "<url>" --name Nova --display transcript     # or:  npm star
 | `--format` | `OUTPUT_FORMAT` | `md` · `txt` · `json` |
 | `--out` / `--port` | `OUTPUT_DIR` / `WEB_PORT` | folder / port |
 | `--web` / `--no-web` | `WEB` | live page on / off |
+
+---
+
+## Auto-join from your calendar
+
+Don't want to paste a link before every meeting? Connect a calendar once and the notetaker joins your
+meetings **by itself** — and, if you like, starts the moment you log in, so it's always on without you
+thinking about it. It's **opt-in and off by default**.
+
+Turn it on in the builder, or any time afterwards:
+
+```bash
+python autojoin.py connect        # or:  node autojoin.js connect
+```
+
+You'll paste your calendar's private **"secret iCal" link** — read-only, and every provider has one. It
+checks the link on the spot and lists your next few meetings so you know it worked. Where to find it:
+
+- **Google Calendar** → *Settings → Settings for my calendars → your calendar → Integrate calendar* → copy **"Secret address in iCal format"** (ends in `.ics`).
+- **Outlook / Microsoft 365** → *Calendar → Shared calendars → Publish a calendar* → publish, then copy the ICS link.
+- **Apple iCloud** → share the calendar as a **Public Calendar** and copy the `webcal://` link.
+
+You paste it **once** — the link doesn't expire or rotate on its own. It only changes if you reset it
+yourself in your calendar's settings (Google: "Reset" next to the secret address); if you ever do, just
+run `connect` again with the new one.
+
+From then on a small watcher checks your calendar and sends the bot into each meeting as it starts — any
+event with a Meet / Zoom / Teams link. Run and manage it from any terminal (cmd, PowerShell, bash):
+
+| Command | What it does |
+|---|---|
+| `python autojoin.py status`  | is it running, and what's next? |
+| `python autojoin.py start`   | run it in the background now |
+| `python autojoin.py stop`    | stop auto-joining *(meetings already in progress keep running until they empty)* |
+| `python autojoin.py stop --all` | …and also make bots **leave meetings in progress**, confirming each call is ended |
+| `python autojoin.py restart` | stop, then start |
+| `python autojoin.py logs`    | what it's been doing |
+| `python autojoin.py poll`    | check the calendar once, right now, and show what it sees |
+| `python autojoin.py enable`  | also start it automatically when you log in |
+| `python autojoin.py disable` | stop starting it on login |
+| `python autojoin.py connect` | connect (or re-connect) a calendar |
+
+> *Node users:* `node autojoin.js <command>` — identical commands.
+
+**Start it on boot.** `enable` registers it with your OS the native, no-admin way — **Windows** Startup,
+**macOS** `launchd`, or **Linux** `systemd --user` — and prints the exact file it created, so nothing
+happens behind your back. `disable` removes it and stops the watcher.
+
+**Your calendar stays on your computer.** The link is read **only by this app, on your own machine** —
+your events are fetched from your provider and parsed locally, and are **never sent to us or to
+AgentCall**. The only thing that ever leaves your computer is the bot joining a meeting, exactly as when
+you run the notetaker by hand.
+
+**Tune it** in [`config.jsonc`](config.jsonc) under `CALENDAR` — how often it checks, how early it joins,
+and whether to skip all-day or declined events. The secret link is **not** kept there: it's a credential,
+so it lives in your gitignored `.env` as `CALENDAR_ICS_URL`. **Keep that link private** — anyone who has
+it can read your calendar.
+
+> [!NOTE]
+> A calendar's iCal feed can lag a few minutes, so a meeting created seconds before it starts might be
+> missed — anything scheduled ahead is fine. Want live, to-the-second access (a "Sign in with Google"
+> flow) instead? Calendar access sits behind one small interface built to swap, so it's a natural place
+> to extend — it all rides on **[AgentCall](https://agentcall.dev)**.
 
 ---
 
