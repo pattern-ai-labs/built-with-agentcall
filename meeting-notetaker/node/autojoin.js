@@ -176,7 +176,16 @@ async function pollOnce(cal, joined, now) {
       const reason = skipReason(ev);
       if (reason) { logLine(`skip  ${(ev.title || "?").slice(0, 30).padEnd(30)} (${reason})`); continue; }
       if (joined[ev.key()]) continue;
-      const { pid } = launchNotetaker(ev);
+      let pid;
+      try {
+        ({ pid } = launchNotetaker(ev));
+      } catch (e) {
+        // One meeting failing to launch must never affect the others. Log it, leave
+        // it un-joined so the next poll can retry, and move on.
+        logLine(`Couldn't launch the notetaker for "${(ev.title || "?").slice(0, 40)}" (${e.message}) ` +
+                `— skipping just this one; your other meetings are unaffected.`);
+        continue;
+      }
       joined[ev.key()] = now.toISOString();
       saveJoined(joined);
       joinedCount += 1;
