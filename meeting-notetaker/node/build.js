@@ -88,6 +88,8 @@ function parseFlags(argv) {
     else if (x === "--display") a.display = rest[++i];
     else if (x === "--format") a.format = rest[++i];
     else if (x === "--image") a.image = rest[++i];
+    else if (x === "--calendar-ics") a.calendarIcs = rest[++i];
+    else if (x === "--autostart") a.autostart = true;
   }
   return a;
 }
@@ -179,10 +181,52 @@ function nextSteps() {
   console.log("    " + d("·") + " name, face, or notes format  " + d("→") + "  edit " + b("config.jsonc"));
   console.log("    " + d("·") + " your AgentCall key  " + d("→") + "  edit " + b(".env"));
   console.log("    " + d("·") + " your own camera tile  " + d("→") + "  drop an image in " + b("avatars/") + " and set " + b("DISPLAY"));
+  console.log("    " + d("·") + " auto-join from your calendar  " + d("→") + "  " + b("node autojoin.js connect"));
   console.log();
 }
 
-function assemble(name, display, fmt, key, reused) {
+async function connectInteractive() {
+  // After the notetaker is built, offer to connect a calendar so it auto-joins.
+  const cc = require("./connect-calendar.js");
+  const yn = (await askText("Auto-join meetings from your calendar?", "it'll join them by itself · y/N", "n")).toLowerCase();
+  if (yn !== "y" && yn !== "yes") return;
+  console.log();
+  for (const line of cc.WALKTHROUGH.split("\n")) console.log(line.trim() ? "  " + col(DIM, line) : "");
+  console.log();
+  let url = "", events = null;
+  for (;;) {
+    url = await askText("Paste your secret iCal link", "read-only · Enter to skip", "");
+    if (!url) { console.log("  " + col(DIM, "Skipped — connect later with: node autojoin.js connect")); return; }
+    console.log("  " + col(DIM, "checking that link…"));
+    const r = await cc.validate(url);
+    if (r.error) { console.log("   " + col(BOLD, "✗") + " " + r.error); continue; }
+    events = r.events; break;
+  }
+  cc.saveIcsUrl(url);
+  cc.setAutoJoin(true);
+  console.log();
+  cc.summarize(events);
+  const boot = (await askText("Turn auto-join on now?", "runs it now and at every login · Y/n", "y")).toLowerCase();
+  if (boot === "" || boot === "y" || boot === "yes") {
+    require("child_process").spawnSync(process.execPath, [path.join(__dirname, "autojoin.js"), "start"], { stdio: "inherit" });
+  } else {
+    console.log("  " + col(DIM, "turn it on any time with: node autojoin.js start"));
+  }
+}
+
+async function connectFlags(url, autostart) {
+  const cc = require("./connect-calendar.js");
+  const r = await cc.validate(url);
+  if (r.error) { console.log("   calendar not connected: " + r.error); return; }
+  cc.saveIcsUrl(url);
+  cc.setAutoJoin(true);
+  cc.summarize(r.events);
+  if (autostart) {
+    require("child_process").spawnSync(process.execPath, [path.join(__dirname, "autojoin.js"), "start"], { stdio: "inherit" });
+  }
+}
+
+async function assemble(name, display, fmt, key, reused, connect) {
   console.log();
   console.log("  " + col(BOLD, `Building ${name}`) + col(DIM, " …"));
   console.log("   " + col(BOLD, "✓") + " wired the AgentCall listener");
@@ -191,6 +235,8 @@ function assemble(name, display, fmt, key, reused) {
   console.log("   " + col(BOLD, "✓") + " wrote config.jsonc");
   writeEnv(key);
   console.log("   " + col(BOLD, "✓") + (reused ? " copied your AgentCall key into .env" : " saved your key to .env"));
+
+  if (connect) await connect();
 
   doneCard(name);
   nextSteps();
@@ -303,12 +349,12 @@ async function interactive() {
     ["md", "Markdown"], ["txt", "plain text"], ["json", "JSON"],
   ], "md");
   const found = existingKey();
-  assemble(name, display, fmt, key || found, !key && !!found);
+  await assemble(name, display, fmt, key || found, !key && !!found, connectInteractive);
 }
 
 async function main() {
   const args = parseFlags(process.argv);
-  const hasFlags = !!(args.key || args.name || args.display || args.format || args.image);
+  const hasFlags = !!(args.key || args.name || args.display || args.format || args.image || args.calendarIcs);
 
   if (!hasFlags && !process.stdin.isTTY) {
     console.log("This builder asks you questions, but there's no terminal here");
@@ -332,7 +378,8 @@ async function main() {
       console.log("  or set AGENTCALL_API_KEY, or add it to .env, then build again.");
       process.exit(1);
     }
-    assemble(name, display, args.format || "md", key || found, !key && !!found);
+    const connect = args.calendarIcs ? () => connectFlags(args.calendarIcs, !!args.autostart) : null;
+    await assemble(name, display, args.format || "md", key || found, !key && !!found, connect);
   } else {
     await interactive();
   }

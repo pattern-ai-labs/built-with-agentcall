@@ -35,5 +35,27 @@
   // To use your OWN avatar, drop a file in avatars/ and set DISPLAY to its name:
   // a raw image (avatars/me.png / .jpg / .gif / .svg) OR an HTML page (avatars/me.html).
   "DISPLAY": "audio",
-  "AVATAR_LINES": 8             // transcript tile: how many recent lines to show
+  "AVATAR_LINES": 8,            // transcript tile: how many recent lines to show
+
+  // ── Auto-join from your calendar (optional) ───────────────────────────────
+  // Connect a calendar once and the notetaker joins your meetings on its own —
+  // no pasting a link each time. Turn it on with the builder
+  //   python build.py     (or)     npm run build
+  // which walks you through copying your calendar's private "secret iCal" address
+  // and (optionally) starting it automatically when you log in. You can flip it on
+  // by hand here too. The secret link itself is NOT stored here — it's a credential,
+  // so it lives in .env as CALENDAR_ICS_URL (gitignored), never in this shared file.
+  //
+  // Manage it from any terminal (cmd, PowerShell, bash) — one simple on/off:
+  //   python autojoin.py start | stop [--all]       turn auto-join ON / OFF (runs now AND at login)
+  //   python autojoin.py status | restart | logs | connect | poll    (node: node autojoin.js ...)
+  "CALENDAR": {
+    "AUTO_JOIN": false,          // master switch — the builder turns this on when you connect a calendar
+    "SOURCE": "ics",             // "ics" today; "google" (OAuth) can be added later behind the same interface
+    "POLL_SECONDS": 60,          // how often to re-check the calendar for meetings about to start
+    "JOIN_LEAD_SECONDS": 120,    // join up to this many seconds BEFORE a meeting's start time
+    "JOIN_GRACE_SECONDS": 300,   // still join if we're up to this many seconds LATE (a missed poll, or just booted)
+    "SKIP_DECLINED": true,       // don't join meetings you've declined (best-effort from the iCal feed)
+    "SKIP_ALL_DAY": true         // ignore all-day events — they're rarely real meetings
+  }
 }

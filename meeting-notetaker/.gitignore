@@ -7,6 +7,9 @@ notes/
 # Secrets
 .env
 
+# Auto-join runtime: process id, logs, and the "already joined" dedupe state
+.notetaker/
+
 # Python
 __pycache__/
 *.pyc
