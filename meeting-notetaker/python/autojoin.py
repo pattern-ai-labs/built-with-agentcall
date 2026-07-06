@@ -247,8 +247,11 @@ def launch_notetaker(ev):
 
     kwargs = dict(stdin=subprocess.DEVNULL, stdout=logfile, stderr=subprocess.STDOUT, cwd=_HERE)
     if sys.platform == "win32":
-        DETACHED_PROCESS = 0x00000008
-        kwargs["creationflags"] = DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        # CREATE_NO_WINDOW (not DETACHED_PROCESS): the notetaker — and the AgentCall
+        # bridge it spawns — run with a hidden console, so no empty terminal window
+        # pops up for each auto-joined meeting. CREATE_NEW_PROCESS_GROUP keeps our
+        # Ctrl-C from reaching it; `stop --all` still ends it via the process tree.
+        kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP
     else:
         kwargs["start_new_session"] = True
     proc = subprocess.Popen(notetaker_cmd(ev.url), **kwargs)
