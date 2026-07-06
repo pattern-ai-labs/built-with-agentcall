@@ -299,7 +299,14 @@ def poll_once(cal, joined, now=None):
                 continue
             if ev.key() in joined:
                 continue
-            pid, logpath = launch_notetaker(ev)
+            try:
+                pid, logpath = launch_notetaker(ev)
+            except Exception as e:
+                # One meeting failing to launch must never affect the others. Log it,
+                # leave it un-joined so the next poll can retry, and move on.
+                log.warning("Couldn't launch the notetaker for %r (%s) — skipping just this "
+                            "one; your other meetings are unaffected.", (ev.title or "?")[:40], e)
+                continue
             joined[ev.key()] = now.isoformat()
             save_joined(joined)
             joined_count += 1
