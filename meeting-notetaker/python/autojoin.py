@@ -5,15 +5,14 @@ Connect a calendar once (python build.py, or python autojoin.py connect), then
 this little scheduler polls it and launches notetaker.py for each meeting as it
 starts. It wraps the notetaker — it doesn't change how the notetaker joins.
 
-    python autojoin.py status        # is it running? what's next?
-    python autojoin.py start         # run it in the background
-    python autojoin.py stop          # stop auto-joining (meetings already in progress keep running)
-    python autojoin.py restart
+    python autojoin.py start         # turn it ON  — run now AND start whenever you log in
+    python autojoin.py stop          # turn it OFF — stop now AND stop starting at login
+    python autojoin.py status        # is it on? what's next?
+    python autojoin.py restart       # bounce the watcher (stays on)
     python autojoin.py logs          # what it's been doing
-    python autojoin.py run           # run in the foreground (Ctrl-C to stop) — what start launches
+    python autojoin.py connect       # connect (or re-connect) a calendar
+    python autojoin.py run           # run once in the foreground, WITHOUT touching start-at-login
     python autojoin.py poll          # check once, right now, and print what it sees
-    python autojoin.py enable        # also start it automatically when you log in
-    python autojoin.py disable
 
 Settings live in config.jsonc under CALENDAR; the secret calendar link lives in
 .env as CALENDAR_ICS_URL. Powered by AgentCall — https://agentcall.dev
@@ -469,20 +468,9 @@ def _terminate(pid):
             pass
 
 
-def cmd_start(_args):
-    pid = _read_pid()
-    if _pid_alive(pid):
-        print(f"Auto-join is already running (pid {pid}).  `python autojoin.py status` to see what's next.")
-        return 0
-    if not api_key_present():
-        print("No AgentCall API key found. Set AGENTCALL_API_KEY (or add it via python build.py) first.")
-        return 1
-    try:
-        cs.make_source(cal_cfg(), os.environ)
-    except Exception as e:
-        print(f"Can't start: {e}")
-        return 1
-
+def _spawn_daemon():
+    """Launch the background watcher as a detached process (Windows-style: we own it;
+    the pid file is written by `run`). On mac/linux the service manager does this."""
     _ensure_runtime()
     # The daemon owns autojoin.log via its own handler; send its raw stdout/stderr to
     # a separate boot log so an early crash (e.g. a bad import) is still captured.
@@ -495,15 +483,36 @@ def cmd_start(_args):
         kwargs["start_new_session"] = True
     subprocess.Popen([sys.executable, os.path.join(_HERE, "autojoin.py"), "run"], **kwargs)
 
+
+def cmd_start(_args):
+    """Turn auto-join ON: run it now AND have it start when you log in."""
+    import autostart
+    if not api_key_present():
+        print("No AgentCall API key found. Set AGENTCALL_API_KEY (or add it via python build.py) first.")
+        return 1
+    try:
+        cs.make_source(cal_cfg(), os.environ)
+    except Exception as e:
+        print(f"Can't turn on auto-join: {e}")
+        return 1
+
+    already = _pid_alive(_read_pid())
+    # On Windows we start the process ourselves; on mac/linux autostart.on() hands it
+    # to launchd/systemd, which starts it now and registers boot in one go.
+    if autostart.MANUAL_PROCESS and not already:
+        _spawn_daemon()
+    autostart.on()
+
     for _ in range(20):                            # wait for the daemon to write its pid
         time.sleep(0.1)
         pid = _read_pid()
         if _pid_alive(pid):
-            print(f"Auto-join started (pid {pid}). It'll join your meetings as they begin.")
+            print(f"● Auto-join is ON ({'already running' if already else 'started'}, pid {pid}).")
+            print("  It's watching now, and it'll start automatically when you log in.")
             print("  python autojoin.py status     see what's next")
-            print("  python autojoin.py stop       stop auto-joining")
+            print("  python autojoin.py stop       turn it off (now and at login)")
             return 0
-    print("Started it, but couldn't confirm it's running — check `python autojoin.py logs`.")
+    print("Registered start-on-login, but couldn't confirm it's running — check `python autojoin.py logs`.")
     return 1
 
 
@@ -564,34 +573,39 @@ def _stop_children():
 
 
 def cmd_stop(args):
+    """Turn auto-join OFF: stop it now AND stop it starting when you log in."""
+    import autostart
     stop_all = getattr(args, "all", False)
     pid = _read_pid()
-    if not _pid_alive(pid):
-        print("Auto-join isn't running.")
-        try:
-            os.remove(PID_FILE)
-        except OSError:
-            pass
-        if stop_all:
-            _stop_children()
-        return 0
-    _terminate(pid)
+    running = _pid_alive(pid)
+    if autostart.MANUAL_PROCESS and running:       # Windows: we own the process
+        _terminate(pid)
+    autostart.off()                                # remove boot (mac/linux: also stops it)
     for f in (PID_FILE, STATUS_FILE):
         try:
             os.remove(f)
         except OSError:
             pass
+    print("○ Auto-join is OFF — stopped, and it won't start when you log in.")
     if stop_all:
-        print(f"Stopped auto-join (pid {pid}).")
         _stop_children()
     else:
-        print(f"Stopped auto-join (pid {pid}). Meetings already in progress keep running "
-              "until they empty — use `stop --all` to make them leave too.")
+        print("  (meetings already in progress keep running until they empty — "
+              "`stop --all` makes their bots leave too.)")
     return 0
 
 
 def cmd_restart(args):
-    cmd_stop(args)
+    """Bounce the watcher; it stays ON."""
+    import autostart
+    pid = _read_pid()
+    if autostart.MANUAL_PROCESS and _pid_alive(pid):
+        _terminate(pid)
+        for f in (PID_FILE, STATUS_FILE):
+            try:
+                os.remove(f)
+            except OSError:
+                pass
     time.sleep(0.5)
     return cmd_start(args)
 
@@ -619,11 +633,23 @@ def cmd_status(_args):
     except (OSError, ValueError):
         pass
 
-    if alive:
-        print(f"● auto-join is RUNNING (pid {pid})")
+    import autostart
+    try:
+        boot = autostart.is_on()
+    except Exception:
+        boot = False
+
+    if alive and boot:
+        print(f"● auto-join is ON (running, pid {pid}) — and starts when you log in")
+    elif alive and not boot:
+        print(f"● auto-join is running (pid {pid}), but is NOT set to start at login")
+        print("    make it start at login too:  python autojoin.py start")
+    elif boot and not alive:
+        print("◐ auto-join is set to start at login, but isn't running right now")
+        print("    turn it on now:  python autojoin.py start")
     else:
-        print("○ auto-join is STOPPED")
-        print("    start it with:  python autojoin.py start")
+        print("○ auto-join is OFF")
+        print("    turn it on:  python autojoin.py start")
 
     try:
         with open(os.path.join(_PROJECT_ROOT, ".env"), encoding="utf-8") as fh:
@@ -642,8 +668,6 @@ def cmd_status(_args):
         print(f"                  {nxt['url']}")
     elif alive:
         print("    next meeting: nothing within the next hour")
-    if on_boot_enabled():
-        print("    starts on login: yes")
     return 0
 
 
@@ -666,25 +690,7 @@ def cmd_logs(args):
     return 0
 
 
-# ── boot autostart + connect are wired in by their own modules ──────────────
-def on_boot_enabled():
-    try:
-        import autostart
-        return autostart.is_enabled()
-    except Exception:
-        return False
-
-
-def cmd_enable(args):
-    import autostart
-    return autostart.enable()
-
-
-def cmd_disable(args):
-    import autostart
-    return autostart.disable()
-
-
+# ── connect is wired in by its own module ───────────────────────────────────
 def cmd_connect(args):
     import connect_calendar
     if getattr(args, "from_env", False):
@@ -703,8 +709,8 @@ def cmd_connect(args):
             return 1
         connect_calendar.set_auto_join(True)
         connect_calendar.summarize(events)
-        print("\nAuto-join is on. Start it:  python autojoin.py start   "
-              "(or `enable` to also start on login)")
+        print("\nCalendar connected. Turn auto-join on with:  python autojoin.py start")
+        print("  (that runs it now and starts it whenever you log in; `stop` turns it off.)")
         return 0
     return connect_calendar.interactive()
 
@@ -714,27 +720,25 @@ def main(argv):
     parser = argparse.ArgumentParser(
         prog="autojoin", description="Watch your calendar and auto-join meetings with the notetaker.")
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("run", help="run in the foreground (what `start` launches)")
-    sub.add_parser("poll", help="check the calendar once, now, and print what it sees")
-    sub.add_parser("start", help="run it in the background")
-    st = sub.add_parser("stop", help="stop auto-joining")
+    sub.add_parser("start", help="turn auto-join ON — run now AND start at login")
+    st = sub.add_parser("stop", help="turn auto-join OFF — stop now AND stop starting at login")
     st.add_argument("--all", action="store_true",
                     help="also make bots leave any meetings still in progress")
-    sub.add_parser("restart", help="stop, then start")
-    sub.add_parser("status", help="is it running, and what's next?")
+    sub.add_parser("restart", help="bounce the watcher (stays on)")
+    sub.add_parser("status", help="is it on, and what's next?")
     lg = sub.add_parser("logs", help="show recent activity")
     lg.add_argument("-n", "--lines", type=int, default=40)
-    sub.add_parser("enable", help="also start it automatically when you log in")
-    sub.add_parser("disable", help="stop starting it on login")
     cn = sub.add_parser("connect", help="connect a calendar (paste your secret iCal link)")
     cn.add_argument("--from-env", action="store_true", dest="from_env",
                     help="non-interactive: use the CALENDAR_ICS_URL already saved in .env")
+    sub.add_parser("run", help="run in the foreground, once, without touching start-at-login")
+    sub.add_parser("poll", help="check the calendar once, now, and print what it sees")
 
     args = parser.parse_args(argv)
     handlers = {
         "run": cmd_run, "poll": cmd_poll, "start": cmd_start, "stop": cmd_stop,
         "restart": cmd_restart, "status": cmd_status, "logs": cmd_logs,
-        "enable": cmd_enable, "disable": cmd_disable, "connect": cmd_connect,
+        "connect": cmd_connect,
     }
     if not args.cmd:
         parser.print_help()

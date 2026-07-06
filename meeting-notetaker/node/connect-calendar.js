@@ -111,15 +111,14 @@ async function interactive() {
   summarize(events);
 
   let ans = "n";
-  try { ans = (await question("\n  Start auto-join automatically when you log in? (Y/n): ")).trim().toLowerCase(); } catch {}
+  try { ans = (await question("\n  Turn auto-join on now? (Y/n)  [runs it now, and at every login]: ")).trim().toLowerCase(); } catch {}
   if (ans === "" || ans === "y" || ans === "yes") {
-    try { require("./autostart.js").enable(); }
-    catch (e) { console.log(`  (couldn't set up start-on-login: ${e.message})`); console.log("  Start it yourself any time with:  node autojoin.js start"); }
-  } else {
-    console.log("  Starting it for now (won't survive a reboot — run `node autojoin.js enable` for that):");
     spawnSync(process.execPath, [path.join(HERE, "autojoin.js"), "start"], { stdio: "inherit" });
+  } else {
+    console.log("  Left off for now. Turn it on any time with:  node autojoin.js start");
+    console.log("  (that runs it and starts it at login; `stop` turns it back off.)");
   }
-  console.log("\n  Done — auto-join is connected. Check it any time with: node autojoin.js status");
+  console.log("\n  Done — calendar connected. Check it any time with: node autojoin.js status");
   return 0;
 }
 

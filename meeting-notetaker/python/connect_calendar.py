@@ -146,22 +146,16 @@ def interactive():
     summarize(events)
 
     try:
-        ans = input("\n  Start auto-join automatically when you log in? (Y/n): ").strip().lower()
+        ans = input("\n  Turn auto-join on now? (Y/n)  [runs it now, and at every login]: ").strip().lower()
     except (EOFError, KeyboardInterrupt):
         ans = "n"
     if ans in ("", "y", "yes"):
-        try:
-            import autostart
-            autostart.enable()
-        except Exception as e:
-            print(f"  (couldn't set up start-on-login: {e})")
-            print("  Start it yourself any time with:  python autojoin.py start")
-    else:
         import subprocess
-        print("  Starting it for now (won't survive a reboot — run "
-              "`python autojoin.py enable` for that):")
         subprocess.run([sys.executable, os.path.join(_HERE, "autojoin.py"), "start"])
-    print("\n  Done — auto-join is connected. Check it any time with: python autojoin.py status")
+    else:
+        print("  Left off for now. Turn it on any time with:  python autojoin.py start")
+        print("  (that runs it and starts it at login; `stop` turns it back off.)")
+    print("\n  Done — calendar connected. Check it any time with: python autojoin.py status")
     return 0
 
 

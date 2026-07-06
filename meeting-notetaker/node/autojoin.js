@@ -4,11 +4,11 @@
  * Auto-join: watch your calendar and send the notetaker into meetings by itself.
  * Node mirror of python/autojoin.py — same commands, same behavior.
  *
- *   node autojoin.js status | start | stop | restart | logs
- *   node autojoin.js run      # foreground (what `start` launches)
+ *   node autojoin.js start    # turn it ON  — run now AND start at every login
+ *   node autojoin.js stop     # turn it OFF — stop now AND stop starting at login
+ *   node autojoin.js status | restart | logs | connect
+ *   node autojoin.js run      # run once in the foreground, without touching start-at-login
  *   node autojoin.js poll     # check once, now, and print what it sees
- *   node autojoin.js enable | disable    # start it on login, or not
- *   node autojoin.js connect  # paste your secret iCal link
  *
  * It wraps notetaker.js; it doesn't change how the notetaker joins. Settings live
  * in config.jsonc under CALENDAR; the secret link is CALENDAR_ICS_URL in .env.
@@ -276,29 +276,38 @@ function terminate(pid) {
   }
 }
 
-async function cmdStart() {
-  let pid = readPid();
-  if (pidAlive(pid)) { console.log(`Auto-join is already running (pid ${pid}).  \`node autojoin.js status\` to see what's next.`); return 0; }
-  if (!apiKeyPresent()) { console.log("No AgentCall API key found. Set AGENTCALL_API_KEY (or add it via npm run build) first."); return 1; }
-  try { cs.makeSource(calCfg(), process.env); } catch (e) { console.log(`Can't start: ${e.message}`); return 1; }
-
+function spawnDaemon() {
   ensureRuntime();
   const fd = fs.openSync(BOOT_LOG, "w");
   const child = spawn(process.execPath, [path.join(HERE, "autojoin.js"), "run"],
     { cwd: HERE, stdio: ["ignore", fd, fd], detached: true, windowsHide: true });
   child.unref();
+}
+
+async function cmdStart() {
+  // Turn auto-join ON: run it now AND have it start when you log in.
+  const autostart = require("./autostart.js");
+  if (!apiKeyPresent()) { console.log("No AgentCall API key found. Set AGENTCALL_API_KEY (or add it via npm run build) first."); return 1; }
+  try { cs.makeSource(calCfg(), process.env); } catch (e) { console.log(`Can't turn on auto-join: ${e.message}`); return 1; }
+
+  const already = pidAlive(readPid());
+  // On Windows we start the process ourselves; on mac/linux autostart.on() hands it
+  // to launchd/systemd, which starts it now and registers boot in one go.
+  if (autostart.MANUAL_PROCESS && !already) spawnDaemon();
+  autostart.on();
 
   for (let i = 0; i < 20; i++) {
     await sleep(100);
-    pid = readPid();
+    const pid = readPid();
     if (pidAlive(pid)) {
-      console.log(`Auto-join started (pid ${pid}). It'll join your meetings as they begin.`);
+      console.log(`● Auto-join is ON (${already ? "already running" : "started"}, pid ${pid}).`);
+      console.log("  It's watching now, and it'll start automatically when you log in.");
       console.log("  node autojoin.js status     see what's next");
-      console.log("  node autojoin.js stop       stop auto-joining");
+      console.log("  node autojoin.js stop       turn it off (now and at login)");
       return 0;
     }
   }
-  console.log("Started it, but couldn't confirm it's running — check `node autojoin.js logs`.");
+  console.log("Registered start-on-login, but couldn't confirm it's running — check `node autojoin.js logs`.");
   return 1;
 }
 function callIdFromLog(logpath) {
@@ -336,26 +345,30 @@ async function stopChildren() {
 }
 
 async function cmdStop(opts) {
+  // Turn auto-join OFF: stop it now AND stop it starting when you log in.
+  const autostart = require("./autostart.js");
   const stopAll = !!(opts && opts.all);
   const pid = readPid();
-  if (!pidAlive(pid)) {
-    console.log("Auto-join isn't running.");
-    try { fs.unlinkSync(PID_FILE); } catch {}
-    if (stopAll) await stopChildren();
-    return 0;
-  }
-  terminate(pid);
+  if (autostart.MANUAL_PROCESS && pidAlive(pid)) terminate(pid);   // Windows: we own the process
+  autostart.off();                                                 // remove boot (mac/linux: also stops it)
   for (const f of [PID_FILE, STATUS_FILE]) { try { fs.unlinkSync(f); } catch {} }
-  if (stopAll) {
-    console.log(`Stopped auto-join (pid ${pid}).`);
-    await stopChildren();
-  } else {
-    console.log(`Stopped auto-join (pid ${pid}). Meetings already in progress keep running ` +
-                "until they empty — use `stop --all` to make them leave too.");
-  }
+  console.log("○ Auto-join is OFF — stopped, and it won't start when you log in.");
+  if (stopAll) await stopChildren();
+  else console.log("  (meetings already in progress keep running until they empty — " +
+                   "`stop --all` makes their bots leave too.)");
   return 0;
 }
-async function cmdRestart() { await cmdStop({}); await sleep(500); return cmdStart(); }
+async function cmdRestart() {
+  // Bounce the watcher; it stays ON.
+  const autostart = require("./autostart.js");
+  const pid = readPid();
+  if (autostart.MANUAL_PROCESS && pidAlive(pid)) {
+    terminate(pid);
+    for (const f of [PID_FILE, STATUS_FILE]) { try { fs.unlinkSync(f); } catch {} }
+  }
+  await sleep(500);
+  return cmdStart();
+}
 
 function fmtAgo(iso) {
   const t = Date.parse(iso);
@@ -374,16 +387,19 @@ function calendarConnected() {
 }
 function cmdStatus() {
   const pid = readPid(), alive = pidAlive(pid);
+  let boot = false;
+  try { boot = require("./autostart.js").isOn(); } catch {}
   let st = {};
   try { st = JSON.parse(fs.readFileSync(STATUS_FILE, "utf-8")); } catch {}
-  if (alive) console.log(`● auto-join is RUNNING (pid ${pid})`);
-  else { console.log("○ auto-join is STOPPED"); console.log("    start it with:  node autojoin.js start"); }
+  if (alive && boot) console.log(`● auto-join is ON (running, pid ${pid}) — and starts when you log in`);
+  else if (alive && !boot) { console.log(`● auto-join is running (pid ${pid}), but is NOT set to start at login`); console.log("    make it start at login too:  node autojoin.js start"); }
+  else if (boot && !alive) { console.log("◐ auto-join is set to start at login, but isn't running right now"); console.log("    turn it on now:  node autojoin.js start"); }
+  else { console.log("○ auto-join is OFF"); console.log("    turn it on:  node autojoin.js start"); }
   console.log(`    calendar: ${calendarConnected() ? "connected (" + (st.source || "iCal feed") + ")" : "NOT connected — run node autojoin.js connect"}`);
   console.log(`    auto-join in config: ${calCfg().AUTO_JOIN ? "on" : "off"}`);
   if (st.last_poll) console.log(`    last checked: ${fmtAgo(st.last_poll)}`);
   if (st.next_meeting) { console.log(`    next meeting: ${st.next_meeting.title}  at ${st.next_meeting.start}`); console.log(`                  ${st.next_meeting.url}`); }
   else if (alive) console.log("    next meeting: nothing within the next hour");
-  if (onBootEnabled()) console.log("    starts on login: yes");
   return 0;
 }
 function cmdLogs(args) {
@@ -401,10 +417,7 @@ function cmdLogs(args) {
   return 0;
 }
 
-// ── boot autostart + connect (their own modules) ────────────────────────────
-function onBootEnabled() { try { return require("./autostart.js").isEnabled(); } catch { return false; } }
-function cmdEnable() { return require("./autostart.js").enable(); }
-function cmdDisable() { return require("./autostart.js").disable(); }
+// ── connect (its own module) ────────────────────────────────────────────────
 async function cmdConnect(opts) {
   const cc = require("./connect-calendar.js");
   if (opts && opts.fromEnv) {
@@ -421,7 +434,8 @@ async function cmdConnect(opts) {
     if (r.error) { console.log(`✗ ${r.error}`); return 1; }
     cc.setAutoJoin(true);
     cc.summarize(r.events);
-    console.log("\nAuto-join is on. Start it:  node autojoin.js start   (or `enable` to also start on login)");
+    console.log("\nCalendar connected. Turn auto-join on with:  node autojoin.js start");
+    console.log("  (that runs it now and starts it whenever you log in; `stop` turns it off.)");
     return 0;
   }
   return cc.interactive();
@@ -430,18 +444,16 @@ async function cmdConnect(opts) {
 // ── CLI ─────────────────────────────────────────────────────────────────────
 const HELP = `autojoin — watch your calendar and auto-join meetings with the notetaker.
 
-  node autojoin.js status         is it running, and what's next?
-  node autojoin.js start          run it in the background
-  node autojoin.js stop           stop auto-joining (meetings in progress keep running)
+  node autojoin.js start          turn it ON  — run now AND start whenever you log in
+  node autojoin.js stop           turn it OFF — stop now AND stop starting at login
   node autojoin.js stop --all     …and also make bots leave meetings in progress
-  node autojoin.js restart
+  node autojoin.js status         is it on, and what's next?
+  node autojoin.js restart        bounce the watcher (stays on)
   node autojoin.js logs [-n N]
-  node autojoin.js run            run in the foreground (what start launches)
-  node autojoin.js poll           check the calendar once, now
-  node autojoin.js enable         also start it when you log in
-  node autojoin.js disable
-  node autojoin.js connect        paste your secret iCal link
-  node autojoin.js connect --from-env   use the CALENDAR_ICS_URL already saved in .env`;
+  node autojoin.js connect        connect (or re-connect) a calendar
+  node autojoin.js connect --from-env   use the CALENDAR_ICS_URL already saved in .env
+  node autojoin.js run            run once in the foreground, WITHOUT touching start-at-login
+  node autojoin.js poll           check the calendar once, now`;
 
 async function main(argv) {
   const cmd = argv[0];
@@ -456,8 +468,6 @@ async function main(argv) {
     case "restart": return cmdRestart();
     case "status": return cmdStatus();
     case "logs": return cmdLogs({ lines });
-    case "enable": return cmdEnable();
-    case "disable": return cmdDisable();
     case "connect": return cmdConnect({ fromEnv: argv.includes("--from-env") });
     default: console.log(HELP); return 0;
   }

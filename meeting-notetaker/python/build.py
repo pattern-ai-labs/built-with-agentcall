@@ -382,14 +382,11 @@ def _connect_interactive():
     cc.set_auto_join(True)
     print()
     cc.summarize(events)
-    if ask("Start it automatically when you log in?", "y/N", "n").lower() in ("y", "yes"):
-        try:
-            import autostart
-            autostart.enable()
-        except Exception as e:
-            print(f"  (couldn't set up start-on-login: {e})")
+    if ask("Turn auto-join on now?", "runs it now and at every login · Y/n", "y").lower() in ("", "y", "yes"):
+        import subprocess
+        subprocess.run([sys.executable, os.path.join(_HERE, "autojoin.py"), "start"])
     else:
-        print("  " + col(DIM, "start it any time with: python autojoin.py start"))
+        print("  " + col(DIM, "turn it on any time with: python autojoin.py start"))
 
 
 def _connect_flags(ics_url, autostart_flag):
@@ -402,11 +399,8 @@ def _connect_flags(ics_url, autostart_flag):
     cc.set_auto_join(True)
     cc.summarize(events)
     if autostart_flag:
-        try:
-            import autostart
-            autostart.enable()
-        except Exception as e:
-            print(f"  (couldn't set up start-on-login: {e})")
+        import subprocess
+        subprocess.run([sys.executable, os.path.join(_HERE, "autojoin.py"), "start"])
 
 
 def assemble(name, display, fmt, key, reused=False, connect=None):

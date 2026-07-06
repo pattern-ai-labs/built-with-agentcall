@@ -206,12 +206,11 @@ async function connectInteractive() {
   cc.setAutoJoin(true);
   console.log();
   cc.summarize(events);
-  const boot = (await askText("Start it automatically when you log in?", "y/N", "n")).toLowerCase();
-  if (boot === "y" || boot === "yes") {
-    try { require("./autostart.js").enable(); }
-    catch (e) { console.log(`  (couldn't set up start-on-login: ${e.message})`); }
+  const boot = (await askText("Turn auto-join on now?", "runs it now and at every login · Y/n", "y")).toLowerCase();
+  if (boot === "" || boot === "y" || boot === "yes") {
+    require("child_process").spawnSync(process.execPath, [path.join(__dirname, "autojoin.js"), "start"], { stdio: "inherit" });
   } else {
-    console.log("  " + col(DIM, "start it any time with: node autojoin.js start"));
+    console.log("  " + col(DIM, "turn it on any time with: node autojoin.js start"));
   }
 }
 
@@ -223,8 +222,7 @@ async function connectFlags(url, autostart) {
   cc.setAutoJoin(true);
   cc.summarize(r.events);
   if (autostart) {
-    try { require("./autostart.js").enable(); }
-    catch (e) { console.log(`  (couldn't set up start-on-login: ${e.message})`); }
+    require("child_process").spawnSync(process.execPath, [path.join(__dirname, "autojoin.js"), "start"], { stdio: "inherit" });
   }
 }
 

@@ -46,20 +46,16 @@ def _win_enable():
     os.makedirs(_win_startup_dir(), exist_ok=True)
     with open(vbs, "w", encoding="utf-8") as f:
         f.write(content)
-    print("  " + "✓" + " added a startup launcher so auto-join starts when you log in:")
-    print(f"    {vbs}")
-    return 0
+    return 0                                       # quiet: autojoin.py owns the on/off message
 
 
 def _win_disable():
-    vbs = _win_vbs()
     try:
-        os.remove(vbs)
-        print("  removed the startup launcher — auto-join won't start on login anymore.")
+        os.remove(_win_vbs())
     except FileNotFoundError:
-        print("  (it wasn't set to start on login.)")
+        pass
     except OSError as e:
-        print(f"  couldn't remove {vbs}: {e}")
+        print(f"  (couldn't remove the startup launcher {_win_vbs()}: {e})")
         return 1
     return 0
 
@@ -179,26 +175,32 @@ def _linux_is_enabled():
 
 
 # ── platform dispatch ───────────────────────────────────────────────────────
-def enable():
+# On Windows there's no user service manager, so autojoin.py runs the daemon
+# itself and these just add/remove the Startup launcher. On macOS/Linux the
+# service manager (launchd/systemd) runs the daemon AND handles boot, so on()/off()
+# there start and stop it too. MANUAL_PROCESS tells autojoin which world it's in.
+MANUAL_PROCESS = (sys.platform == "win32")
+
+
+def on():
+    """Register start-on-login. On mac/linux this also starts it now."""
     if sys.platform == "win32":
-        rc = _win_enable()
-        _start_now()                             # Startup only fires at login; start it now too
-        return rc
+        return _win_enable()
     if sys.platform == "darwin":
-        return _mac_enable()                     # launchd RunAtLoad starts it now
-    return _linux_enable()                        # systemd --now starts it now
+        return _mac_enable()
+    return _linux_enable()
 
 
-def disable():
+def off():
+    """Remove start-on-login. On mac/linux this also stops it now."""
     if sys.platform == "win32":
-        _stop_now()
         return _win_disable()
     if sys.platform == "darwin":
         return _mac_disable()
     return _linux_disable()
 
 
-def is_enabled():
+def is_on():
     if sys.platform == "win32":
         return _win_is_enabled()
     if sys.platform == "darwin":
@@ -206,21 +208,13 @@ def is_enabled():
     return _linux_is_enabled()
 
 
-def _start_now():
-    subprocess.run([sys.executable, AUTOJOIN, "start"])
-
-
-def _stop_now():
-    subprocess.run([sys.executable, AUTOJOIN, "stop"])
-
-
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
-    if cmd == "enable":
-        raise SystemExit(enable())
-    if cmd == "disable":
-        raise SystemExit(disable())
+    if cmd == "on":
+        raise SystemExit(on())
+    if cmd == "off":
+        raise SystemExit(off())
     if cmd == "status":
-        print("start-on-login:", "yes" if is_enabled() else "no")
+        print("start-on-login:", "yes" if is_on() else "no")
         raise SystemExit(0)
-    print("usage: python autostart.py [enable|disable|status]")
+    print("usage: python autostart.py [on|off|status]")

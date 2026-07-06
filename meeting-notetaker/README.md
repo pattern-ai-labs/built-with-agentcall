@@ -193,9 +193,10 @@ never tell me to run something in a terminal.
    b) When I say it's saved, check `.env` has a non-empty CALENDAR_ICS_URL (existence only — do not echo
       it), then run:  python autojoin.py connect --from-env   (Node: node autojoin.js connect --from-env)
       and show me its output — it validates the link and lists my upcoming meetings.
-   c) Ask: start it now, or also start automatically at login? Run `python autojoin.py start` or
-      `python autojoin.py enable` accordingly, then `python autojoin.py status` to show me it's running.
-      I can stop it any time with `python autojoin.py stop` (add `--all` to pull bots out of meetings too).
+   c) Ask: turn auto-join on now? If yes, run `python autojoin.py start` (Node: node autojoin.js start) —
+      that runs it now and starts it at every login — then `python autojoin.py status` to show me it's on.
+      I can turn it off any time with `python autojoin.py stop` (add `--all` to also pull bots out of any
+      meetings in progress).
 
 Do each step yourself, in order. If a step fails, stop and show me the exact error — don't guess
 or fake success. After this one-time setup I can change any setting by editing config.jsonc directly.
@@ -246,26 +247,25 @@ yourself in your calendar's settings (Google: "Reset" next to the secret address
 run `connect` again with the new one.
 
 From then on a small watcher checks your calendar and sends the bot into each meeting as it starts — any
-event with a Meet / Zoom / Teams link. Run and manage it from any terminal (cmd, PowerShell, bash):
+event with a Meet / Zoom / Teams link. It's one simple **on/off** from any terminal (cmd, PowerShell, bash):
 
 | Command | What it does |
 |---|---|
-| `python autojoin.py status`  | is it running, and what's next? |
-| `python autojoin.py start`   | run it in the background now |
-| `python autojoin.py stop`    | stop auto-joining *(meetings already in progress keep running until they empty)* |
-| `python autojoin.py stop --all` | …and also make bots **leave meetings in progress**, confirming each call is ended |
-| `python autojoin.py restart` | stop, then start |
+| `python autojoin.py start`   | **turn it ON** — run it now **and** start it every time you log in |
+| `python autojoin.py stop`    | **turn it OFF** — stop it now **and** stop it starting at login |
+| `python autojoin.py stop --all` | off, **and** make bots **leave meetings in progress** (ending each call) |
+| `python autojoin.py status`  | is it on, and what's next? |
+| `python autojoin.py restart` | bounce the watcher (stays on) |
 | `python autojoin.py logs`    | what it's been doing |
-| `python autojoin.py poll`    | check the calendar once, right now, and show what it sees |
-| `python autojoin.py enable`  | also start it automatically when you log in |
-| `python autojoin.py disable` | stop starting it on login |
 | `python autojoin.py connect` | connect (or re-connect) a calendar |
+| `python autojoin.py poll`    | check the calendar once, right now, and show what it sees |
 
 > *Node users:* `node autojoin.js <command>` — identical commands.
 
-**Start it on boot.** `enable` registers it with your OS the native, no-admin way — **Windows** Startup,
-**macOS** `launchd`, or **Linux** `systemd --user` — and prints the exact file it created, so nothing
-happens behind your back. `disable` removes it and stops the watcher.
+**One on/off, boot included.** `start` both runs it now **and** registers it to start when you log in —
+the native, no-admin way per OS (**Windows** Startup folder, **macOS** `launchd`, **Linux** `systemd --user`).
+`stop` reverses both: it stops now **and** won't come back at the next reboot. So `stop` really means off.
+(Just want to try it once without touching login-start? `python autojoin.py run` runs it in the foreground.)
 
 **Your calendar stays on your computer.** The link is read **only by this app, on your own machine** —
 your events are fetched from your provider and parsed locally, and are **never sent to us or to

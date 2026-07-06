@@ -46,9 +46,9 @@
   // by hand here too. The secret link itself is NOT stored here — it's a credential,
   // so it lives in .env as CALENDAR_ICS_URL (gitignored), never in this shared file.
   //
-  // Manage it from any terminal (cmd, PowerShell, bash):
-  //   python autojoin.py status | start | stop [--all] | restart | logs | poll   (node: node autojoin.js ...)
-  //   python autojoin.py enable | disable | connect     (start on login on/off · connect a calendar)
+  // Manage it from any terminal (cmd, PowerShell, bash) — one simple on/off:
+  //   python autojoin.py start | stop [--all]       turn auto-join ON / OFF (runs now AND at login)
+  //   python autojoin.py status | restart | logs | connect | poll    (node: node autojoin.js ...)
   "CALENDAR": {
     "AUTO_JOIN": false,          // master switch — the builder turns this on when you connect a calendar
     "SOURCE": "ics",             // "ics" today; "google" (OAuth) can be added later behind the same interface

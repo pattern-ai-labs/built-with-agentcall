@@ -35,13 +35,11 @@ function winEnable() {
     `sh.Run ${runArg}, 0, False\r\n`;
   fs.mkdirSync(winStartupDir(), { recursive: true });
   fs.writeFileSync(vbs, content);
-  console.log("  ✓ added a startup launcher so auto-join starts when you log in:");
-  console.log(`    ${vbs}`);
-  return 0;
+  return 0;                                    // quiet: autojoin.js owns the on/off message
 }
 function winDisable() {
-  try { fs.unlinkSync(winVbs()); console.log("  removed the startup launcher — auto-join won't start on login anymore."); }
-  catch (e) { if (e.code === "ENOENT") console.log("  (it wasn't set to start on login.)"); else { console.log(`  couldn't remove ${winVbs()}: ${e.message}`); return 1; } }
+  try { fs.unlinkSync(winVbs()); }
+  catch (e) { if (e.code !== "ENOENT") { console.log(`  (couldn't remove the startup launcher ${winVbs()}: ${e.message})`); return 1; } }
   return 0;
 }
 function winIsEnabled() { try { return fs.existsSync(winVbs()); } catch { return false; } }
@@ -118,31 +116,34 @@ function linuxDisable() {
 function linuxIsEnabled() { try { return fs.existsSync(linuxUnit()); } catch { return false; } }
 
 // ── dispatch ─────────────────────────────────────────────────────────────────
-function startNow() { spawnSync(NODE, [AUTOJOIN, "start"], { stdio: "inherit" }); }
-function stopNow() { spawnSync(NODE, [AUTOJOIN, "stop"], { stdio: "inherit" }); }
+// On Windows there's no user service manager, so autojoin.js runs the daemon itself
+// and these just add/remove the Startup launcher. On macOS/Linux the service manager
+// runs the daemon AND handles boot, so on()/off() start and stop it too.
+// MANUAL_PROCESS tells autojoin which world it's in.
+const MANUAL_PROCESS = process.platform === "win32";
 
-function enable() {
-  if (process.platform === "win32") { const rc = winEnable(); startNow(); return rc; }
+function on() {
+  if (process.platform === "win32") return winEnable();
   if (process.platform === "darwin") return macEnable();
   return linuxEnable();
 }
-function disable() {
-  if (process.platform === "win32") { stopNow(); return winDisable(); }
+function off() {
+  if (process.platform === "win32") return winDisable();
   if (process.platform === "darwin") return macDisable();
   return linuxDisable();
 }
-function isEnabled() {
+function isOn() {
   if (process.platform === "win32") return winIsEnabled();
   if (process.platform === "darwin") return macIsEnabled();
   return linuxIsEnabled();
 }
 
-module.exports = { enable, disable, isEnabled };
+module.exports = { on, off, isOn, MANUAL_PROCESS };
 
 if (require.main === module) {
   const cmd = process.argv[2];
-  if (cmd === "enable") process.exit(enable());
-  else if (cmd === "disable") process.exit(disable());
-  else if (cmd === "status") { console.log("start-on-login:", isEnabled() ? "yes" : "no"); process.exit(0); }
-  else { console.log("usage: node autostart.js [enable|disable|status]"); process.exit(0); }
+  if (cmd === "on") process.exit(on());
+  else if (cmd === "off") process.exit(off());
+  else if (cmd === "status") { console.log("start-on-login:", isOn() ? "yes" : "no"); process.exit(0); }
+  else { console.log("usage: node autostart.js [on|off|status]"); process.exit(0); }
 }
