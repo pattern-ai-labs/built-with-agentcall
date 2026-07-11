@@ -69,6 +69,13 @@ the slide off the screen.** Run `doc_to_deck.py` first, then look at what it pro
    fix the input (or install LibreOffice) and relaunch. A bot that never joins beats one that looks broken.
 4. **Never leave a call running.** present.py stops billing on every exit path itself — but if YOU
    spawned it, confirm the process actually exited when the presentation ends.
+5. **The deck does NOT start by itself — YOU must reply `{"cmd":"present"}`.** The moment you launch,
+   start tailing `link/heard.jsonl`. When anyone says "go ahead" / "you can start" / "begin", your ONLY
+   correct action is to append `{"id":<that line's id>,"cmd":"present"}` to `link/commands.jsonl`. Nothing
+   else starts the narration. If you don't, the bot just sits there greeting an audience that's waiting —
+   this has happened in a real meeting. Do not get distracted mid-call, do not stop watching the file
+   until the bot has left. (A human can rescue it by tapping **Start** on the phone remote, but that is
+   their fallback, not your excuse.)
 
 **1b · Honor the user's brief — their instructions shape the deck AND how you drive it.** When the user
 says anything beyond "present this", capture it and apply it. It lands in one of two places:
@@ -250,6 +257,10 @@ request first instead of cold-narrating (that little confirmation is what makes 
 than dumb). The bot also speaks a quick "one moment" on its own when idle and addressed.
 
 **How to decide (your judgment, not the code's):**
+- **Only START on a CLEAR go-ahead — never a garbled/ambiguous transcript.** STT mangles short phrases,
+  so a mis-heard line can look like "begin" when it wasn't; a false start cuts across a settling room. If
+  unsure, don't fire `{"cmd":"present"}` — `say` a one-line clarifier or wait for a clean go-ahead. (The
+  human can always tap **Start** on the remote.)
 - **Answer from the deck** — every heard line carries the current `slide`/`title`, and you have the full
   `deck.json` / `source.json`. Keep spoken answers to 1–2 sentences.
 - **Off-topic?** Don't force it — `say` a one-line steer-back ("that's outside today's deck — happy to
