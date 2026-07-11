@@ -778,9 +778,11 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
                 try: tmr.cancel()
                 except Exception: pass
             G[key] = None
-        # Stop whatever the bot is currently saying, then acknowledge — so a question mid-presentation
+        # Stop whatever the bot is currently saying, then acknowledge — so a request mid-presentation
         # gets feedback (not silence) and the bot isn't talking over the asker while the agent thinks.
         # Spaced just after the hush (so the hush doesn't clear the ack); flavored by context and rotated.
+        # This fires ONCE per forwarded request. It used to sound like spam only because ordinary room
+        # chatter was being forwarded too — the gate in handle_utterance is what stopped that.
         hush()
         speak_after(settle, pick(_ACKS_START if G["conv"] == "offered" else _ACKS_MID))
         G["heard_seq"] += 1
@@ -844,6 +846,13 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
                 goto(int(cmd.get("n")) - 1, announce=(str(cmd["say"]) if cmd.get("say") else None))
             except (TypeError, ValueError):
                 pass
+        elif action in ("mic", "mute", "unmute"):
+            # Toggle the bot's mic if a meeting muted it mid-session. "unmute"→on, "mute"→off,
+            # "mic"→whatever `action` field says (default on). It auto-unmutes on join anyway.
+            mic = "off" if action == "mute" else (cmd.get("action", "on") if action == "mic" else "on")
+            if proc:
+                send({"command": "mic", "action": mic})
+            spoke_only = True   # nothing spoken; let the deck resume as if it were a no-op
         elif action:
             intent = _CMD_ALIAS.get(action, action)
             if intent in ("leave", "present", "start", "yes", "resume", "continue",
@@ -901,12 +910,20 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
         speak_after(settle, pick(_LINES_LEAVE), then="endcall", tail=tail)
 
     def handle_utterance(text, speaker=""):
-        # No keyword matching. If the bot is addressed by name, or we're still inside the
-        # follow-up window from a recent exchange, hand it to the agent (the brain) to interpret.
-        # Otherwise stay quiet — ordinary meeting chatter is ignored.
+        # No keyword matching. What gets handed to the agent (the brain), by state:
+        #   • OFFERED (waiting to be told to start): forward EVERYTHING. The bot's whole job here is to
+        #     catch a "go ahead", which STT often mangles — don't make people hit a name + a 20s window
+        #     just to start. (The brain still only STARTS on a clear go-ahead — see SKILL.md — so this is
+        #     receptive, not trigger-happy.)
+        #   • PRESENTING (auto-play): only a NAMED address. Un-named room chatter must not be forwarded —
+        #     forward() cancels the advance timer, so chatter would stall the deck between slides.
+        #   • Otherwise (paused/browsing): the short follow-up window, so bare "next"/"back" still work.
+        # Barge-in is unaffected in every state — the bot stops talking the instant anyone speaks (audio-side).
         if not link_on or G["conv"] == "leaving":
             return
-        if not (_addressed(text, bot_name) or time.time() < G["engaged_until"]):
+        if not (_addressed(text, bot_name)
+                or G["conv"] == "offered"
+                or (not G["autoplay"] and time.time() < G["engaged_until"])):
             return
         # Being addressed keeps the follow-up window open NOW (not only after forward()), so a burst of
         # bare "next"/"back" repeats right after the name stays in-window instead of getting dropped.
@@ -1027,6 +1044,10 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
                     print(f"  In the lobby — waiting to be admitted. Please click 'Admit' for '{bot_name}'.")
             elif et == "call.bot_ready":
                 G["ready"] = True
+                # UNMUTE the bot the moment it's in — a presenter that can't be heard is useless, and
+                # some meetings admit new participants muted. (No-op if it was already live.)
+                if proc:
+                    send({"command": "mic", "action": "on"})
                 # Screenshare mode: put the deck on the meeting's main stage — ONCE. Slides then advance
                 # in place via state.json (never stop/swap), which avoids the known screenshare-wedge bug.
                 if screenshare_mode and proc and ss_port:
