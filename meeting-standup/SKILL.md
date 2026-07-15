@@ -1,16 +1,11 @@
 ---
 name: meeting-standup
 description: >
-  A skill that turns your AI agent into a STANDUP MANAGER — for engineering managers
-  and team leads who want their daily standup to run itself. The agent joins your
-  Google Meet, Zoom, or Teams call as an audio-only bot and runs the whole meeting:
-  greets the team, calls on each person by name in order, asks the standup questions,
-  KEEPS TIME (a gentle nudge, then it moves on), keeps a running summary + action
-  items, remembers each person's blockers across days, then POSTS THE SUMMARY IN THE
-  CHAT and stays on as a summary manager — taking latecomers' updates, reading the
-  summary back when asked, and leaving only when told or when everyone else has. No
-  camera, no screen-share. Cross-platform, billing-safe. Use when a manager or team
-  lead wants their agent to run / facilitate / host a daily standup or scrum.
+  Turns your AI agent into a STANDUP MANAGER: it joins your Google Meet, Zoom, or Teams
+  call as an audio-only bot and runs the whole daily standup. Calls on each person in the
+  call by name, keeps time, tracks blockers across days, then posts a summary with action
+  items to the chat and stays on to manage it. Use when someone wants their agent to run,
+  facilitate, or host a daily standup or scrum.
 argument-hint: <meeting-url> [--auto] [--name <bot>] [--voice <id>]  (or --local to dry-run)
 user-invocable: true
 license: MIT

@@ -23,41 +23,16 @@ Powered by **[AgentCall](https://agentcall.dev)** · no LLM, no database — jus
 
 ---
 
-## Why you'll want it
-
-Standups are the most expensive fifteen minutes of the day — it's everyone's time at once, every
-single morning. This gets you the value without the drag:
-
-- **Reclaim the time.** A tight, timeboxed round instead of a meandering 20-minute meeting — a
-  5-person standup lands in ~7 minutes, and your team gets those minutes back every day.
-- **Nobody has to run it.** No facilitator, no note-taker, no *"…who's next?"* — it runs the same
-  way every day, whether or not you're in the room.
-- **Nothing falls through the cracks.** Every update is captured, blockers become action items with
-  owners, and open blockers get chased the next day until they're actually cleared.
-- **The follow-up writes itself.** The summary and action items are in the meeting chat before
-  anyone's back at their desk — no *"can someone send the notes?"*
-- **Meetings stop eating your focus.** Each person gives sixty seconds of update and gets back to
-  work; you still get the full picture, without chasing anyone for it.
-
----
-
 ## What it does
 
-- **Runs the round-robin** — calls on each teammate in your configured order, only the ones actually in
-  the call.
-- **Keeps time** — a soft per-person cap with a nudge near the end, so standup stays short.
-- **Keeps a live summary + action items** — captures each update, attributed by name, and turns blockers
-  into action items.
-- **Asks the room for a fix** — when someone's blocked, it asks if anyone has a quick unblock and folds
-  the answer straight into the summary as the action item (catches fixes offered later, too).
-- **Catches chat updates too** — bad mic or joined silent? Post your update in the meeting chat and it's
-  folded into the summary (thoughtfully — links and banter are ignored).
-- **Posts the summary in the chat** when the round's done — no copy-paste afterward.
-- **Then stays on as your summary manager** — if someone joins late it raises a hand and takes their
-  update too; if someone asks, it reads the summary back.
-- **Tracks blockers across days** — “Last time you flagged the staging access — is that cleared?” — and
-  carries open ones forward.
-- **Leaves only when you tell it, or when everyone else has** — and always stops billing on the way out.
+- **Runs the standup for you** — calls on everyone in the call by name; no facilitator, no *"…who's next?"*.
+- **No setup** — it uses whoever's in the meeting. There's no team roster to maintain.
+- **Keeps it short** — a soft time cap per person, so a 5-person standup takes ~7 minutes, not 20.
+- **Remembers blockers across days** — follows up on yesterday's blocker until it's actually cleared.
+- **Writes the summary** — every update captured by name, blockers turned into action items, posted to the chat when the round's done.
+- **Catches chat updates** — joined on a bad mic? Drop your update in the chat and it's folded in.
+- **Stays on as summary manager** — takes a latecomer's update, and reads the summary back on request.
+- **Audio only** — no camera, no screen-share, nothing for anyone to install.
 
 ---
 
@@ -97,38 +72,30 @@ export AGENTCALL_API_KEY="ak_ac_..."     # Windows:  set AGENTCALL_API_KEY=ak_ac
 
 ## Run it
 
-**1. Set your team** (once). Open [`config.jsonc`](config.jsonc) and list your team under `TEAM`, in the
-order you want them called:
-
-```jsonc
-"TEAM": [
-  { "name": "Alex" },
-  { "name": "Priya" },
-  { "name": "Sam" }
-],
-```
-
-Use the name each person appears as in the meeting. While you're there you can tweak the questions,
-the per-person time limit, and whether it waits for a "go ahead" — but the defaults are fine.
-
-**2. Send it in.** The agent way — just say:
+Just send it into your meeting:
 
 > *"Run my standup: `<meeting link>`"*
 
-…or the terminal way — join your meeting first, then:
+Admit the bot (~30–90s). It greets the room and **calls on whoever's in the call** — no team to set up.
+It waits for a **"go ahead,"** runs the round, **posts the summary to the chat**, and **stays** to take a
+latecomer's update or read the summary back. It leaves when you ask it to, or when everyone else does.
+Your summary also lands in [`standups/`](standups/).
+
+No roster, no config needed. Want a fixed order or specific names? See [Make it yours](#make-it-yours).
+
+## Run it yourself (optional, no agent)
+
+Prefer the terminal? Join the meeting first, then:
 
 ```bash
 python scripts/standup.py "https://meet.google.com/your-link"
 ```
 
-Admit the bot (~30–90s). It greets the room and waits for a **"go ahead"** (or pass `--auto` to start
-right away). It runs the round, **posts the summary in the chat**, and **stays** — ready to take a
-latecomer's update or read the summary back. It leaves when you tell it (*"Nova, you can head out"*),
-when everyone else leaves, or on **Ctrl+C**. Your summary also lands in [`standups/`](standups/).
+Or watch the whole flow with no meeting at all — a scripted standup right in your terminal:
 
-> **Try it first, no meeting needed:** `python scripts/standup.py --local` plays a scripted standup right
-> in your terminal — round-robin, timeboxing, the chat summary, a **latecomer** joining, and a clean
-> leave — so you can see exactly how it behaves before going live.
+```bash
+python scripts/standup.py --local
+```
 
 <!-- VIDEO: swap YOUTUBE_ID once the walkthrough is uploaded (out/standup-setup.mp4 in the video project)
 <p align="center">
@@ -189,6 +156,7 @@ The whole thing is turn-based, so only speech crosses the network — it never f
 
 ## Make it yours
 
+- **Fixed order, or specific names?** List your team under `TEAM` in `config.jsonc` (also pins names for cross-day tracking). Leave it empty — the default — and it just calls on whoever's in the call.
 - **Different questions?** Edit `QUESTIONS` in `config.jsonc`.
 - **Longer or shorter turns?** `PER_PERSON_SECONDS` and `NUDGE_AT_SECONDS`.
 - **Post the summary to Slack/email?** Hand the finished `standups/…` file to your AI agent and ask it

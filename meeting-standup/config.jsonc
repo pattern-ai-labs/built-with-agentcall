@@ -11,11 +11,11 @@
   // back to your ~/.agentcall/config.json name, else "Scrum".
   "BOT_NAME": "",
 
-  // Your team — the bot calls on these people, IN THIS ORDER. It only calls on
-  // the ones who are ACTUALLY in the call (anyone missing is skipped, and — if
-  // absentee catch-up is on — noted). Add each teammate as { "name": "..." };
-  // "name" should match how they appear in the meeting so turns are attributed
-  // to the right person.
+  // Team order (OPTIONAL). Leave this empty — the default — and the bot simply
+  // calls on whoever is in the meeting, in the order they joined. Nothing to set up.
+  // Set it only if you want a specific order, or to pin exact names for cross-day
+  // blocker tracking. Names should match how people appear in the call; anyone
+  // listed but not present is skipped.
   "TEAM": [
     // { "name": "Alex" },
     // { "name": "Priya" },
