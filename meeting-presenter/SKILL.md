@@ -28,6 +28,14 @@ Word — and the bot presents it.** You can also start from just a topic.
 
 ## Do this in order (the whole flow — same every time, no detours)
 
+**Before anything — you need something to present. Never join a meeting empty.** If the user named
+no document, no topic, and no existing deck, do NOT launch. First **offer what's already in `decks/`**
+(list those decks by title), **or ask what topic to build one from** (you can author a deck from just a
+topic — see B). Only move on once you have material in hand. A quick "what should I present?" beats a
+bot that joins with nothing to say. *(Suggesting the user's existing `decks/` and offering to build from
+a topic is the standard no-material flow — do it for every user, not just when you happen to know their
+decks.)*
+
 **0 · Preflight (once).**
 - **API key — check in this order, and DON'T ask if it's already there** (one config, the SAME file
   AgentCall uses; this is the exact order `load_api_key` uses):
@@ -67,8 +75,13 @@ the slide off the screen.** Run `doc_to_deck.py` first, then look at what it pro
    automatically; only delete the deck folder if the user explicitly wants a fresh conversion.
 3. **Never invent a placeholder deck or apologize on camera.** If conversion fails, present.py exits —
    fix the input (or install LibreOffice) and relaunch. A bot that never joins beats one that looks broken.
-4. **Never leave a call running.** present.py stops billing on every exit path itself — but if YOU
-   spawned it, confirm the process actually exited when the presentation ends.
+4. **Never leave a call running — and never hard-kill it to rejoin.** present.py stops billing on every
+   exit path itself — but if YOU spawned it, confirm the process actually exited when the presentation
+   ends. **To stop, restart, or rejoin, ALWAYS send `{"cmd":"leave"}` and WAIT for the process to fully
+   exit** (you'll see `Billing stopped.` and the process ends) **before relaunching.** Killing the process
+   (TaskStop / taskkill) to rejoin can skip the call's server-side teardown, so the old bot lingers and
+   your fresh join lands *beside* it — two bots in the meeting (this burned a real session). A clean
+   `{"cmd":"leave"}` is enough and never does that.
 5. **The deck does NOT start by itself — YOU must reply `{"cmd":"present"}`.** The moment you launch,
    start tailing `link/heard.jsonl`. When anyone says "go ahead" / "you can start" / "begin", your ONLY
    correct action is to append `{"id":<that line's id>,"cmd":"present"}` to `link/commands.jsonl`. Nothing
