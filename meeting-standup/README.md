@@ -19,8 +19,6 @@ forward, so nothing quietly falls through the cracks.
 The point: **make your standup fast, consistent, and effortless.** No camera, no screen-share, no app for
 anyone to install. It just talks and listens.
 
-Powered by **[AgentCall](https://agentcall.dev)** · no LLM, no database, just the audio bridge and one script.
-
 ---
 
 ## What it does
@@ -78,8 +76,6 @@ It waits for a **"go ahead,"** runs the round, **posts the summary to the chat**
 latecomer's update or read the summary back. It leaves when you ask it to, or when everyone else does.
 Your summary also lands in [`standups/`](standups/).
 
-No roster, no config needed.
-
 ## Run it yourself (optional, no agent)
 
 Or run it from the terminal:
@@ -88,6 +84,10 @@ Or run it from the terminal:
 python scripts/standup.py "https://meet.google.com/your-link"   # join the meeting first
 python scripts/standup.py --local                                # or try the whole flow, no meeting needed
 ```
+
+> **For devs, to test or build on the skill.** On its own it runs the timed round and saves the summary
+> file. The manager smarts (reflecting updates back, catching blockers, composing the chat summary) come
+> from your AI agent, so use the agent way above for the full experience.
 
 <!-- VIDEO: swap YOUTUBE_ID once the walkthrough is uploaded (out/standup-setup.mp4 in the video project)
 <p align="center">
