@@ -6,9 +6,9 @@
 
 **Let your AI agent run your team's daily standup — so you don't have to.**
 
-Built for **engineering managers and team leads**: point it at your Google Meet / Zoom / Teams call and it
-joins as an **audio-only** bot, greets the team, then goes around **one at a time by name** — asking what
-each person finished, what's next, and what's blocking them. It **keeps time** (a gentle nudge, then it
+Point it at your Google Meet / Zoom / Teams call and it joins as an **audio-only** bot, greets the team,
+then goes around **one at a time by name** — asking what each person finished, what's next, and what's
+blocking them. Built for **engineering managers and team leads**, it **keeps time** (a gentle nudge, then it
 moves on, so a 5-person standup is ~7 minutes, not 20), captures every update, and **posts a clean
 summary to the meeting chat** when it's done — plus saves it to a dated file you can send anywhere.
 
@@ -26,13 +26,10 @@ Powered by **[AgentCall](https://agentcall.dev)** · no LLM, no database — jus
 ## What it does
 
 - **Runs the standup for you** — calls on everyone in the call by name; no facilitator, no *"…who's next?"*.
-- **No setup** — it uses whoever's in the meeting. There's no team roster to maintain.
 - **Keeps it short** — a soft time cap per person, so a 5-person standup takes ~7 minutes, not 20.
 - **Remembers blockers across days** — follows up on yesterday's blocker until it's actually cleared.
 - **Writes the summary** — every update captured by name, blockers turned into action items, posted to the chat when the round's done.
 - **Catches chat updates** — joined on a bad mic? Drop your update in the chat and it's folded in.
-- **Stays on as summary manager** — takes a latecomer's update, and reads the summary back on request.
-- **Audio only** — no camera, no screen-share, nothing for anyone to install.
 
 ---
 
@@ -81,20 +78,15 @@ It waits for a **"go ahead,"** runs the round, **posts the summary to the chat**
 latecomer's update or read the summary back. It leaves when you ask it to, or when everyone else does.
 Your summary also lands in [`standups/`](standups/).
 
-No roster, no config needed. Want a fixed order or specific names? See [Make it yours](#make-it-yours).
+No roster, no config needed.
 
 ## Run it yourself (optional, no agent)
 
-Prefer the terminal? Join the meeting first, then:
+Or run it from the terminal:
 
 ```bash
-python scripts/standup.py "https://meet.google.com/your-link"
-```
-
-Or watch the whole flow with no meeting at all — a scripted standup right in your terminal:
-
-```bash
-python scripts/standup.py --local
+python scripts/standup.py "https://meet.google.com/your-link"   # join the meeting first
+python scripts/standup.py --local                                # or try the whole flow, no meeting needed
 ```
 
 <!-- VIDEO: swap YOUTUBE_ID once the walkthrough is uploaded (out/standup-setup.mp4 in the video project)
@@ -156,7 +148,6 @@ The whole thing is turn-based, so only speech crosses the network — it never f
 
 ## Make it yours
 
-- **Fixed order, or specific names?** List your team under `TEAM` in `config.jsonc` (also pins names for cross-day tracking). Leave it empty — the default — and it just calls on whoever's in the call.
 - **Different questions?** Edit `QUESTIONS` in `config.jsonc`.
 - **Longer or shorter turns?** `PER_PERSON_SECONDS` and `NUDGE_AT_SECONDS`.
 - **Post the summary to Slack/email?** Hand the finished `standups/…` file to your AI agent and ask it
