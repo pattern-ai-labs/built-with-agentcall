@@ -69,6 +69,7 @@ ALONE_GRACE = float(os.environ.get("PRESENT_ALONE_GRACE", "30"))     # leave thi
 REPLY_TIMEOUT = float(os.environ.get("PRESENT_REPLY_TIMEOUT", "45"))  # stop waiting for the agent's command after this (a late start/leave/answer is still honored)
 ENGAGE_WINDOW = float(os.environ.get("PRESENT_ENGAGE_WINDOW", "20"))  # after being addressed, keep listening (no name needed) this long
 NAV_NARRATE_DELAY = float(os.environ.get("PRESENT_NAV_DELAY", "0.35"))  # after a manual jump settles, wait this long, then narrate (kept just above the ~0.3s human double-tap gap; step-guard also dedupes)
+SILENCE_RESUME_SECS = float(os.environ.get("PRESENT_SILENCE_RESUME", "12"))  # after a manual jump's narration ends, if the room stays quiet (no new command/question/pause) this long, resume the hands-free walkthrough on its own — a lone jump shouldn't dead-end the deck. 0 disables.
 HUSH_SETTLE = float(os.environ.get("PRESENT_HUSH_SETTLE", "0.35"))      # a confirmation spoken right after a hush waits this long so the hush lands FIRST (else it clears the confirmation); safe with the faster page poll
 GREET_DELAY = float(os.environ.get("PRESENT_GREET_DELAY", "1.1"))       # screenshare only: wait for the avatar page to connect before the first greeting (floor ~1s so the first line isn't lost)
 
@@ -512,7 +513,7 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
          "ready": False, "bridge_ok": True, "alive": True, "torn": False,
          "humans": set(), "had_human": False, "alone_timer": None,
          "ctrl_url": "", "ctrl_posted": False, "last_goto_t": 0.0, "last_goto_i": -1,
-         "speak_until": 0.0, "nav_timer": None, "autoplay": False, "last_utt": ("", 0.0),
+         "speak_until": 0.0, "nav_timer": None, "resume_timer": None, "autoplay": False, "last_utt": ("", 0.0),
          "heard_seq": 0, "awaiting": set(), "reply_timer": None, "engaged_until": 0.0}
 
     # ── Agent link (interactive only): what the bot HEARS goes to heard.jsonl for the launching
@@ -566,7 +567,7 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
 
     def cancel_timers(*keys):
         """Cancel pending threading.Timers so a stale one can't fire onto the queue after a state change."""
-        for key in (keys or ("adv_timer", "nav_timer", "reply_timer", "alone_timer")):
+        for key in (keys or ("adv_timer", "nav_timer", "resume_timer", "reply_timer", "alone_timer")):
             tmr = G.get(key)
             if tmr:
                 try: tmr.cancel()
@@ -671,12 +672,13 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
     def start_presenting():
         G["conv"] = "presenting"
         G["autoplay"] = True         # walking the deck hands-free (narrate + auto-advance)
-        # A pending manual-jump narration must not fire once auto-play takes over.
-        nt = G.get("nav_timer")
-        if nt:
-            try: nt.cancel()
-            except Exception: pass
-        G["nav_timer"] = None
+        # A pending manual-jump narration — or its silence-resume — must not fire once auto-play takes over.
+        for key in ("nav_timer", "resume_timer"):
+            tmr = G.get(key)
+            if tmr:
+                try: tmr.cancel()
+                except Exception: pass
+            G[key] = None
         # Reflect "presenting" in the shared state IMMEDIATELY. Otherwise the companion page's
         # optimistic Start→Pause flips back to "Start" after its ~1.3s hold, because the server only
         # reaches "presenting" when begin_deck → show(0) fires ~3s later (after the spoken greeting).
@@ -685,7 +687,7 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
         speak_after(settle, pick(_LINES_GO), then="begin_deck", tail=0.6)
 
     def stop_presenting(say_line=True):
-        for key in ("adv_timer", "nav_timer"):
+        for key in ("adv_timer", "nav_timer", "resume_timer"):
             tmr = G.get(key)
             if tmr:
                 try: tmr.cancel()
@@ -712,7 +714,7 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
             return
         G["last_goto_t"] = now
         G["last_goto_i"] = i
-        for key in ("adv_timer", "nav_timer"):
+        for key in ("adv_timer", "nav_timer", "resume_timer"):
             tmr = G.get(key)
             if tmr:
                 try: tmr.cancel()
@@ -741,6 +743,14 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
         text = ((announce.strip() + " " + notes).strip() if announce else notes)
         if text:
             say(text)
+        # Auto-resume: a manual jump is a step, not a run — but if the room stays quiet after the
+        # landed slide finishes narrating, pick the walkthrough back up on its own so a lone jump
+        # doesn't dead-end the deck. Any newer jump, question, pause, present, or leave clears this.
+        if SILENCE_RESUME_SECS > 0:
+            rt = threading.Timer(speech_secs(text) + SILENCE_RESUME_SECS,
+                                 lambda s=step, si=i: events.put({"event": "silence_resume", "step": s, "i": si}))
+            rt.daemon = True; rt.start()
+            G["resume_timer"] = rt
 
     # ── Agent-link helpers: forward what we heard; run the command the agent sends back ──
     def _append_jsonl(path, obj):
@@ -772,7 +782,7 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
         G["engaged_until"] = time.time() + ENGAGE_WINDOW
         # Pause both the auto-advance AND any pending manual-jump narration — while we're handling
         # what was said, nothing else should start speaking (no overlap with the agent's reply).
-        for key in ("adv_timer", "nav_timer"):
+        for key in ("adv_timer", "nav_timer", "resume_timer"):
             tmr = G.get(key)
             if tmr:
                 try: tmr.cancel()
@@ -1108,6 +1118,23 @@ def run(meet_url, deck_path, bot_name, pace, voice, local=False, port=0, mode="a
                     show(max(0, G["i"]))     # from the current slide (0 fresh, or where browsing left off)
             elif et == "nav_narrate":
                 nav_narrate(ev.get("step"), ev.get("i"), ev.get("announce"))
+            elif et == "silence_resume":
+                # A manual jump narrated its slide and the room stayed quiet — resume the hands-free
+                # walkthrough (continues from the NEXT slide; this one already spoke). Guards reject a
+                # stale fire: a newer jump, a pause/leave, a pending question, or autoplay already back
+                # on. If a spoken answer is still playing, wait it out and re-check.
+                if (interactive and ev.get("step") == G["step"] and G["conv"] == "presenting"
+                        and not G["autoplay"] and G["i"] == ev.get("i") and not G["awaiting"]):
+                    if time.time() < G["speak_until"]:
+                        rt = threading.Timer(G["speak_until"] - time.time() + SILENCE_RESUME_SECS,
+                                             lambda s=ev.get("step"), si=ev.get("i"): events.put({"event": "silence_resume", "step": s, "i": si}))
+                        rt.daemon = True; rt.start(); G["resume_timer"] = rt
+                    else:
+                        print(f"  (quiet {int(SILENCE_RESUME_SECS)}s after a manual jump — resuming the walkthrough)")
+                        G["resume_timer"] = None
+                        G["autoplay"] = True
+                        push(status="presenting")
+                        advance()
             elif et == "reply_timeout":
                 # The agent didn't answer within REPLY_TIMEOUT — stop waiting and resume the deck.
                 if G["awaiting"]:
