@@ -1,0 +1,15 @@
+# Saved standups + cross-day tracking (kept local, never committed)
+standups/*
+!standups/.gitkeep
+
+# The agent<->bot link (runtime scratch)
+link/
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/

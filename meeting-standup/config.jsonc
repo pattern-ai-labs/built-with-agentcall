@@ -1,0 +1,74 @@
+{
+  // ══════════════════════════════════════════════════════════════════════════
+  //  YOUR STANDUP MANAGER — the one file you edit. JSON with // comments.
+  //  An AUDIO-ONLY bot: it joins your daily standup, calls on each teammate by
+  //  name, asks the questions, keeps time, and writes a summary. No camera,
+  //  no screen-share — it just talks and listens (the cheapest, lightest mode).
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // The bot's name (what people hear it called in the meeting). Keep it short &
+  // distinctive — speech-to-text mishears long or unusual names. Blank = falls
+  // back to your ~/.agentcall/config.json name, else "Scrum".
+  "BOT_NAME": "",
+
+  // Your team — the bot calls on these people, IN THIS ORDER. It only calls on
+  // the ones who are ACTUALLY in the call (anyone missing is skipped, and — if
+  // absentee catch-up is on — noted). Add each teammate as { "name": "..." };
+  // "name" should match how they appear in the meeting so turns are attributed
+  // to the right person.
+  "TEAM": [
+    // { "name": "Alex" },
+    // { "name": "Priya" },
+    // { "name": "Sam" }
+  ],
+
+  // The questions the bot asks each person. They're spoken together as one
+  // prompt ("what did you finish, what's next, any blockers?"), the natural
+  // standup flow. Edit freely — some teams ask different things.
+  "QUESTIONS": [
+    "What did you get done since the last standup?",
+    "What are you working on today?",
+    "Anything blocking you?"
+  ],
+
+  // ── Timeboxing — the whole point of a standup MANAGER ──────────────────────
+  "PER_PERSON_SECONDS": 90,     // soft cap per person before the bot moves on
+  "NUDGE_AT_SECONDS": 20,       // give a gentle "~20s left" heads-up before the cap
+  "SILENCE_ENDS_TURN": 4,       // this much quiet AFTER someone speaks = they're done.
+                                // A longer thinking pause is still safe: if they resume
+                                // before the next person is called (the reflect pause),
+                                // their turn simply continues — nothing is lost
+  "NO_RESPONSE_SECONDS": 30,    // grace to START talking (the bridge only reports speech
+                                // AFTER a pause, so keep this generous). On a real silence
+                                // it asks the agent what to do, then moves on — no canned line
+  "REFLECT_SECONDS": 8,         // after each person the bot pauses up to this long for the
+                                // agent to reflect their update back ("so you did X, got it")
+                                // before calling the next person. Doubles as resume room for
+                                // slow thinkers. Auto-shortens to ~2.5s when no agent is
+                                // driving, so a standalone run stays snappy. 0 = off
+  "TARGET_MINUTES": 15,         // the overall length you're aiming for (informational)
+
+  // Wait for someone to say "go ahead" before starting. It also starts the moment
+  // ANYONE speaks after the greeting (fast start) — this is just the initial gate.
+  // false = start as soon as the team is in the room.
+  "WAIT_FOR_GO_AHEAD": true,
+
+  // ── The "manager" bit: remember across days ────────────────────────────────
+  // Persist each person's blockers + action items, and at the next standup ask
+  // whether they're resolved before taking the new update. Saved locally in
+  // OUTPUT_DIR/history.json (never leaves your machine).
+  "TRACK_ACROSS_DAYS": true,
+
+  // Where standups + the cross-day history are written (relative to repo root).
+  "OUTPUT_DIR": "standups",
+  "OUTPUT_FORMAT": "md",        // "md", "txt", or "json"
+
+  // The bot STAYS after the round as your summary manager — it only leaves when
+  // someone asks it to (by name), or when everyone else has left the meeting.
+  "LEAVE_WHEN_EMPTY": true,
+  "ALONE_SECONDS": 30,          // safety net: the bridge also leaves after this long alone
+
+  // Voice for the bot (any Kokoro voice id). Blank = your ~/.agentcall default,
+  // else "af_heart".
+  "VOICE": ""
+}

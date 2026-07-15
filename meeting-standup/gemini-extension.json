@@ -1,0 +1,5 @@
+{
+  "name": "meeting-standup",
+  "version": "1.0.0",
+  "description": "Let your AI agent run your team's daily standup, live in any meeting — round-robin, cross-day blocker tracking, spoken + posted summary. Works with Claude Code, Codex, Gemini CLI, and 30+ agents."
+}
