@@ -208,9 +208,23 @@ def save_history(path, hist):
         print(f"  (couldn't save cross-day history: {e})")
 
 
+def _norm_name(n):
+    """Cross-day identity key: exact, normalised. NOT match_name."""
+    return " ".join((n or "").strip().lower().split())
+
+
 def open_blockers_for(hist, roster_name):
+    """Look up a person's carried-over blockers by EXACT name.
+
+    Deliberately not `match_name`: its first-name matching is right for in-meeting
+    speaker attribution (speech-to-text often drops the surname for someone who IS in
+    the room), but across standups it would hand one person's blockers to a DIFFERENT
+    person who merely shares a first name ("Arjun M R" vs "Arjun Reghu"). Chasing the
+    wrong person with someone else's blocker is worse than missing a follow-up.
+    """
+    target = _norm_name(roster_name)
     for person, rec in hist.get("people", {}).items():
-        if match_name(person, roster_name) or match_name(roster_name, person):
+        if _norm_name(person) == target:
             return person, list(rec.get("open_blockers", []))
     return roster_name, []
 
@@ -421,10 +435,16 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
             except Exception:
                 pass
 
+    def _el():
+        """Seconds since the session started. Every spoken/chat line is timestamped so the
+        real timing is visible in the log: how long each turn took, and exactly how long
+        the agent's summary took to land after the round ended."""
+        return time.time() - S["start_ts"]
+
     def say(text):
         if not text:
             return
-        print(f"  🔊 {text}")
+        print(f"  [{_el():6.1f}s] 🔊 {text}")
         send({"command": "tts.speak", "text": text, "voice": voice or "af_heart"})
         if sim:
             sim.on_say(text)
@@ -432,7 +452,8 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
     def chat(text):
         if not text:
             return
-        print(f"  💬 (chat) {text.splitlines()[0][:80]}…" if len(text) > 80 else f"  💬 (chat) {text}")
+        head = (text.splitlines()[0][:80] + "…") if len(text) > 80 else text
+        print(f"  [{_el():6.1f}s] 💬 (chat) {head}")
         send({"command": "send_chat", "message": text})
 
     # ── agent link (the brain): forward what we hear, run what it writes back ──
@@ -449,13 +470,15 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
          "updates": {}, "start_ts": time.time(), "heard_seq": 0,
          "nudged": False, "reasked": False, "cur_blockers": [], "wrote": False,
          "posted": False, "solution_for": "", "listen_open": False, "fill_i": 0,
-         "agent_seen": False, "timers": {}}
+         "agent_seen": False, "timers": {}, "round_done_at": None}
 
     def forward(kind, **fields):
         S["heard_seq"] += 1
         hid = S["heard_seq"]
-        rec = {"id": hid, "kind": kind, "phase": S["phase"], **fields}
+        rec = {"id": hid, "kind": kind, "phase": S["phase"], "t": round(_el(), 1), **fields}
         _append(heard_path, rec)
+        if kind == "round_done":
+            S["round_done_at"] = time.time()      # start the clock on the agent's summary
         if kind in ("addressed", "waiting"):
             print(f"  → heard #{hid} ({kind}) {fields.get('speaker','')}: "
                   f"{fields.get('text','')!r}  (agent's turn)")
@@ -560,7 +583,7 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
         u = S["updates"][person]
         if not u["utterances"]:
             u["no_update"] = True
-        print(f"  ✓ {person} — {why}")
+        print(f"  [{_el():6.1f}s] ✓ {person} — {why}")
         forward("update", person=person, text=u["text"], no_update=u["no_update"])
         write_output()
         # Briefly pause for the agent to reflect the update back ("so you did X — got it"),
@@ -652,6 +675,10 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
 
     def apply_command(c):
         cmd = (c.get("cmd") or "").lower()
+        if S.get("round_done_at") and cmd in ("chat", "say", "speak"):   # time the agent's summary
+            print(f"  [{_el():6.1f}s] ⏱ agent summary landed "
+                  f"{time.time() - S['round_done_at']:.1f}s after the round ended")
+            S["round_done_at"] = None
         cur = S["order"][S["idx"]] if (S["phase"] == "turn" and 0 <= S["idx"] < len(S["order"])) else None
         if cmd in ("say", "speak"):
             say(c.get("text", ""))
@@ -756,8 +783,8 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
             u = session["updates"].get(name, {})
             key = name
             for existing in list(hist["people"]):
-                if match_name(existing, name) or match_name(name, existing):
-                    key = existing; break
+                if _norm_name(existing) == _norm_name(name):   # EXACT — never merge two
+                    key = existing; break                      # people who share a first name
             rec = hist["people"].setdefault(key, {"open_blockers": [], "last_seen": ""})
             rec["last_seen"] = today
             resolved = {r["text"].lower() for r in u.get("resolved_followups", []) if r["resolved"]}
