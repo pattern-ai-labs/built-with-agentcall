@@ -129,14 +129,14 @@ QA'd the signup flow. Next up, the billing emails.
 ```
   standup.py ──spawns──▶ engine/bridge.py ──▶ AgentCall ──▶ joins the meeting (audio only)
       ▲  │                      │
-      │  └── speaks (TTS) ──────┘   calls on people, asks the questions, keeps time
+      │  └── speaks (TTS) ──────┘   calls on people, asks the questions, listens
       │
       └── clean events ◀── who joined/left · who said what (with their name)
 ```
 
 - **AgentCall's audio bridge** gives the bot a voice, a live speaker-attributed transcript, meeting chat,
   and a raised hand, and its built-in barge-in means it won't talk over anyone.
-- **`standup.py` runs the meeting:** the round-robin, timeboxing, capture, chat summary, action items,
+- **`standup.py` runs the meeting:** the round-robin, capture, chat summary, action items,
   cross-day memory, and safe leaving are all deterministic and run on their own, no LLM required.
 - **Your AI agent can be the brain** (optional, and recommended): the bot forwards what it hears to a
   small `link/` file and your agent writes back one line, so it can sharpen the action items, answer
