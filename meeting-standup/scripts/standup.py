@@ -570,8 +570,15 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
         # resumes talking during it, their turn continues (see the user.message router).
         if reflect_secs > 0 and not u["no_update"] and why in ("done", "timebox"):
             S["sub"] = "reflect"
-            arm("reflect", reflect_secs if S["agent_seen"] else min(2.5, reflect_secs))
+            base = reflect_secs if S["agent_seen"] else min(2.5, reflect_secs)
+            is_last = S["idx"] >= len(S["order"]) - 1
+            # Last person: nobody is waiting after them, so give the reflection extra room to
+            # land before the summary. A longer MAX only matters when the agent is slow — it
+            # never adds delay when the reflection comes back quickly.
+            arm("reflect", max(base, 12.0) if is_last else base)
         else:
+            if u["no_update"]:                     # nothing came by voice or chat — acknowledge, don't skip in silence
+                say(f"Okay, no update from {person} for now.")
             next_turn()
 
     def add_blocker(who, text):
@@ -711,10 +718,16 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
         S["end_reason"] = reason
         cancel_all()
         write_output()
-        say("Thanks everyone — I'll head out now. Have a good one.")
-        send({"command": "leave"})
-        print(f"  Leaving ({reason}). Sent leave; will confirm billing stopped.")
-        events.put(None)                      # break the loop → teardown runs end_call
+        say("Thanks everyone, I'll head out now. Have a good one.")
+        print(f"  Leaving ({reason}). Letting the goodbye finish, then leaving.")
+        # Let the goodbye actually play before we drop the call — otherwise the bridge cuts
+        # the TTS off mid-sentence. Small grace, then break the loop → teardown runs end_call.
+        def _depart():
+            send({"command": "leave"})
+            events.put(None)
+        _t = threading.Timer(5.0, _depart)
+        _t.daemon = True
+        _t.start()
 
     def write_output():
         stamp = datetime.now()
