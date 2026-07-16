@@ -435,16 +435,10 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
             except Exception:
                 pass
 
-    def _el():
-        """Seconds since the session started. Every spoken/chat line is timestamped so the
-        real timing is visible in the log: how long each turn took, and exactly how long
-        the agent's summary took to land after the round ended."""
-        return time.time() - S["start_ts"]
-
     def say(text):
         if not text:
             return
-        print(f"  [{_el():6.1f}s] 🔊 {text}")
+        print(f"  🔊 {text}")
         send({"command": "tts.speak", "text": text, "voice": voice or "af_heart"})
         if sim:
             sim.on_say(text)
@@ -452,8 +446,7 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
     def chat(text):
         if not text:
             return
-        head = (text.splitlines()[0][:80] + "…") if len(text) > 80 else text
-        print(f"  [{_el():6.1f}s] 💬 (chat) {head}")
+        print(f"  💬 (chat) {text.splitlines()[0][:80]}…" if len(text) > 80 else f"  💬 (chat) {text}")
         send({"command": "send_chat", "message": text})
 
     # ── agent link (the brain): forward what we hear, run what it writes back ──
@@ -470,21 +463,13 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
          "updates": {}, "start_ts": time.time(), "heard_seq": 0,
          "nudged": False, "reasked": False, "cur_blockers": [], "wrote": False,
          "posted": False, "solution_for": "", "listen_open": False, "fill_i": 0,
-         "agent_seen": False, "timers": {}, "round_done_at": None}
-
-    # Anchor the clock: every [Ns] below is seconds from here. Printing the wall time of
-    # t=0 lets an agent-side stamp be lined up against the engine's log, so the gap between
-    # "the bot asked" and "the agent answered" can be split into delivery vs thinking.
-    print("  ⏱ timing: t=0 at "
-          + datetime.fromtimestamp(S["start_ts"]).strftime("%H:%M:%S.%f")[:-3])
+         "agent_seen": False, "timers": {}}
 
     def forward(kind, **fields):
         S["heard_seq"] += 1
         hid = S["heard_seq"]
-        rec = {"id": hid, "kind": kind, "phase": S["phase"], "t": round(_el(), 1), **fields}
+        rec = {"id": hid, "kind": kind, "phase": S["phase"], **fields}
         _append(heard_path, rec)
-        if kind == "round_done":
-            S["round_done_at"] = time.time()      # start the clock on the agent's summary
         if kind in ("addressed", "waiting"):
             print(f"  → heard #{hid} ({kind}) {fields.get('speaker','')}: "
                   f"{fields.get('text','')!r}  (agent's turn)")
@@ -589,7 +574,7 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
         u = S["updates"][person]
         if not u["utterances"]:
             u["no_update"] = True
-        print(f"  [{_el():6.1f}s] ✓ {person} — {why}")
+        print(f"  ✓ {person} — {why}")
         forward("update", person=person, text=u["text"], no_update=u["no_update"])
         write_output()
         # Briefly pause for the agent to reflect the update back ("so you did X — got it"),
@@ -681,10 +666,6 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
 
     def apply_command(c):
         cmd = (c.get("cmd") or "").lower()
-        if S.get("round_done_at") and cmd in ("chat", "say", "speak"):   # time the agent's summary
-            print(f"  [{_el():6.1f}s] ⏱ agent summary landed "
-                  f"{time.time() - S['round_done_at']:.1f}s after the round ended")
-            S["round_done_at"] = None
         cur = S["order"][S["idx"]] if (S["phase"] == "turn" and 0 <= S["idx"] < len(S["order"])) else None
         if cmd in ("say", "speak"):
             say(c.get("text", ""))
