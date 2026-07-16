@@ -34,10 +34,13 @@
   // ── Timeboxing — the whole point of a standup MANAGER ──────────────────────
   "PER_PERSON_SECONDS": 90,     // soft cap per person before the bot moves on
   "NUDGE_AT_SECONDS": 20,       // give a gentle "~20s left" heads-up before the cap
-  "SILENCE_ENDS_TURN": 4,       // this much quiet AFTER someone speaks = they're done.
-                                // A longer thinking pause is still safe: if they resume
-                                // before the next person is called (the reflect pause),
-                                // their turn simply continues — nothing is lost
+  "SILENCE_ENDS_TURN": 6,       // this much quiet AFTER someone speaks = they're done.
+                                // Raised from 4s: people pause mid-standup to gather a thought,
+                                // and 4s cut them off — the rest of their update then arrived as
+                                // an aside AFTER their turn had closed. If they resume during the
+                                // reflect pause that follows, the turn still continues, so real
+                                // tolerance = this + that pause. Costs ~2s per turn; well worth
+                                // not talking over someone mid-sentence
   "NO_RESPONSE_SECONDS": 30,    // grace to START talking (the bridge only reports speech
                                 // AFTER a pause, so keep this generous). On a real silence
                                 // it asks the agent what to do, then moves on — no canned line

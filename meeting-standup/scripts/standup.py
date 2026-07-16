@@ -472,6 +472,12 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
          "posted": False, "solution_for": "", "listen_open": False, "fill_i": 0,
          "agent_seen": False, "timers": {}, "round_done_at": None}
 
+    # Anchor the clock: every [Ns] below is seconds from here. Printing the wall time of
+    # t=0 lets an agent-side stamp be lined up against the engine's log, so the gap between
+    # "the bot asked" and "the agent answered" can be split into delivery vs thinking.
+    print("  ⏱ timing: t=0 at "
+          + datetime.fromtimestamp(S["start_ts"]).strftime("%H:%M:%S.%f")[:-3])
+
     def forward(kind, **fields):
         S["heard_seq"] += 1
         hid = S["heard_seq"]
