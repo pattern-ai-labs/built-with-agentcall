@@ -53,11 +53,14 @@
   // false = start as soon as the team is in the room.
   "WAIT_FOR_GO_AHEAD": true,
 
-  // ── The "manager" bit: remember across days ────────────────────────────────
-  // Persist each person's blockers + action items, and at the next standup ask
-  // whether they're resolved before taking the new update. Saved locally in
-  // OUTPUT_DIR/history.json (never leaves your machine).
-  "TRACK_ACROSS_DAYS": true,
+  // ── Cross-day blockers: OFF by default ─────────────────────────────────────
+  // false = each standup stands on its own; nothing from last time interrupts the
+  // round. The dated summary files are still written either way, so if someone ASKS
+  // ("what was blocking us last time?") your agent just reads the most recent
+  // OUTPUT_DIR/standup-<date>.md and answers. On demand, not in the way.
+  // true = the bot proactively chases last time's blockers at the start of each
+  // person's turn (persists OUTPUT_DIR/history.json; never leaves your machine).
+  "TRACK_ACROSS_DAYS": false,
 
   // Where standups + the cross-day history are written (relative to repo root).
   "OUTPUT_DIR": "standups",
