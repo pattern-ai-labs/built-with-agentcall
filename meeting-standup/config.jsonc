@@ -41,11 +41,11 @@
   "NO_RESPONSE_SECONDS": 30,    // grace to START talking (the bridge only reports speech
                                 // AFTER a pause, so keep this generous). On a real silence
                                 // it asks the agent what to do, then moves on — no canned line
-  "REFLECT_SECONDS": 8,         // after each person the bot pauses up to this long for the
-                                // agent to reflect their update back ("so you did X, got it")
-                                // before calling the next person. Doubles as resume room for
-                                // slow thinkers. Auto-shortens to ~2.5s when no agent is
-                                // driving, so a standalone run stays snappy. 0 = off
+  "REFLECT_SECONDS": 4,         // after each person the bot pauses UP TO this long for the agent
+                                // to reflect their update back ("so you did X, got it"), then moves
+                                // on. It advances the moment the reflection lands, so this only
+                                // bounds the wait when the agent is slow — keep it short so turns
+                                // stay snappy. Doubles as resume room for slow thinkers. 0 = off
   "TARGET_MINUTES": 15,         // the overall length you're aiming for (informational)
 
   // Wait for someone to say "go ahead" before starting. It also starts the moment
