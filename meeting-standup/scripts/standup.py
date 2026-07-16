@@ -598,24 +598,6 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
                     return True
         return False
 
-    def _deliver_summary(sess):
-        # (B) Deliver the summary the instant the round ends — it has been built incrementally
-        # all along, so there is nothing to wait for. Speak a short recap and post the full
-        # thing to chat, deterministically. The agent still gets `round_done` and can enhance
-        # async (ask the room about a blocker, add a labelled suggestion), but it no longer
-        # sits on the critical path for the summary.
-        lines = []
-        for p in sess["present"]:
-            u = sess["updates"].get(p, {})
-            if u.get("no_update"):
-                lines.append(f"{p}, no update")
-            elif u.get("blockers"):
-                lines.append(f"{p} is blocked, {_blk_text(u['blockers'][0])}")
-            else:
-                lines.append(f"{p}, no blockers")
-        say("Here's the recap. " + ". ".join(lines) + ". The full summary is in the chat.")
-        chat(chat_summary(sess, datetime.now()))
-
     def standby():
         cancel_all()
         S["phase"] = "standby"
@@ -624,10 +606,11 @@ def run(meet_url, bot_name, voice, local=False, auto=False, sim=None):
         sess = _live_session()
         if not S["posted"]:                   # first time — the round just finished
             S["posted"] = True
-            _deliver_summary(sess)            # instant: recap + chat, built during the round, no wait on the agent
+            say("That's everyone. Let me pull the summary together.")   # cover the gap; the AGENT composes it
+            # The summary is the AGENT's — synthesised in its own words, NOT the raw transcript.
+            # It builds each person's line as their update comes in, so it is ready to post right away.
             forward("round_done", present=sess["present"], updates=sess["updates"])
         else:
-            chat(chat_summary(sess, datetime.now()))   # a latecomer folded in → refresh the chat summary
             forward("summary_updated", present=sess["present"], updates=sess["updates"])
 
     def _live_session():
@@ -1151,8 +1134,15 @@ class _Sim:
                         self._cmd({"cmd": "solution", "for": person, "text": fix[1]})
                 self._cmd({"cmd": "reflect", "for": person,     # reflect their update back, then advance
                            "text": f"Thanks {person} — got it."})
-        elif kind in ("round_done", "summary_updated"):    # (B) the engine delivers the summary itself now;
-            if kind == "round_done" and self.latecomer and not self._did_late:   # the brain just handles the rest
+        elif kind in ("round_done", "summary_updated"):    # brain composes + posts the summary
+            pres, ups = rec.get("present", []), rec.get("updates", {})
+            sess = {"present": pres, "updates": ups, "action_items": action_items(pres, ups)}
+            self._cmd({"cmd": "chat", "text": chat_summary(sess, datetime.now())})
+            recap = "Here's the recap. " + ". ".join(     # full-ish spoken summary at the end
+                f"{p}, {'a blocker to follow up' if ups.get(p, {}).get('blockers') else 'no blockers'}"
+                for p in pres) + ". Full summary's in the chat."
+            self._cmd({"cmd": "say", "text": recap})
+            if kind == "round_done" and self.latecomer and not self._did_late:
                 self._did_late = True
                 self._join(self.latecomer[0], 1.0)         # bring in a latecomer
             else:
