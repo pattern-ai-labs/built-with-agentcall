@@ -8,8 +8,8 @@
 
 Point it at your Google Meet / Zoom / Teams call and it joins as an **audio-only** bot, greets the team,
 then goes around **one at a time by name**, asking what each person finished, what's next, and what's
-blocking them. Built for **engineering managers and team leads**, it **keeps time** (a gentle nudge, then
-it moves on), captures every update, and **posts a clean summary to the meeting chat** when it's done,
+blocking them. Built for **engineering managers and team leads**, it **lets each person finish** and moves on when they
+actually stop, captures every update, and **posts a clean summary to the meeting chat** when it's done,
 plus a dated file you can send anywhere.
 
 And because it's a *manager*, not just a note-taker, it **remembers blockers across days**: next standup
@@ -24,7 +24,7 @@ anyone to install. It just talks and listens.
 ## What it does
 
 - **Runs the standup for you.** Calls on everyone in the call by name; no facilitator, no *"…who's next?"*.
-- **Keeps it short.** A soft time cap per person, so a 5-person standup takes ~7 minutes, not 20.
+- **Listens, then moves on.** It lets you finish your update in your own time and moves on when you actually stop — one person at a time, no *"…who's next?"*, no sprawl. It never cuts you off to hit a clock.
 - **Remembers blockers across days.** It follows up on yesterday's blocker until it's actually cleared.
 - **Writes the summary.** Every update captured by name, blockers turned into action items, posted to the chat when the round's done.
 - **Catches chat updates.** Joined on a bad mic? Drop your update in the chat and it's folded in.
