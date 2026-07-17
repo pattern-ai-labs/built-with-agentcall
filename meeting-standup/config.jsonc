@@ -1,0 +1,86 @@
+{
+  // ══════════════════════════════════════════════════════════════════════════
+  //  YOUR STANDUP MANAGER — the one file you edit. JSON with // comments.
+  //  An AUDIO-ONLY bot: it joins your daily standup, calls on each teammate by
+  //  name, asks the questions, keeps time, and writes a summary. No camera,
+  //  no screen-share — it just talks and listens (the cheapest, lightest mode).
+  // ══════════════════════════════════════════════════════════════════════════
+
+  // The bot's name (what people hear it called in the meeting). Keep it short &
+  // distinctive — speech-to-text mishears long or unusual names. Blank = falls
+  // back to your ~/.agentcall/config.json name, else "Scrum".
+  "BOT_NAME": "",
+
+  // Team order (OPTIONAL). Leave this empty — the default — and the bot simply
+  // calls on whoever is in the meeting, in the order they joined. Nothing to set up.
+  // Set it only if you want a specific order, or to pin exact names for cross-day
+  // blocker tracking. Names should match how people appear in the call; anyone
+  // listed but not present is skipped.
+  "TEAM": [
+    // { "name": "Alex" },
+    // { "name": "Priya" },
+    // { "name": "Sam" }
+  ],
+
+  // The questions the bot asks each person. They're spoken together as one
+  // prompt ("what did you finish, what's next, any blockers?"), the natural
+  // standup flow. Edit freely — some teams ask different things.
+  "QUESTIONS": [
+    "What did you get done since the last standup?",
+    "What are you working on today?",
+    "Anything blocking you?"
+  ],
+
+  // ── Timeboxing — the whole point of a standup MANAGER ──────────────────────
+  "PER_PERSON_SECONDS": 300,    // SAFETY NET ONLY — not a way to rush anyone. It exists so a
+                                // stuck mic or open background noise cannot hold the round
+                                // forever. Nobody's real standup runs five minutes, so this
+                                // should never fire on a person actually talking. The real
+                                // "they're done" signal is SILENCE_ENDS_TURN below: let people
+                                // finish, then move on.
+  "NUDGE_AT_SECONDS": 20,       // a gentle "~20s left" heads-up before that safety net, so it
+                                // only ever speaks up in the runaway case
+  "SILENCE_ENDS_TURN": 6,       // this much quiet AFTER someone speaks = they're done.
+                                // Raised from 4s: people pause mid-standup to gather a thought,
+                                // and 4s cut them off — the rest of their update then arrived as
+                                // an aside AFTER their turn had closed. If they resume during the
+                                // reflect pause that follows, the turn still continues, so real
+                                // tolerance = this + that pause. Costs ~2s per turn; well worth
+                                // not talking over someone mid-sentence
+  "NO_RESPONSE_SECONDS": 30,    // grace to START talking (the bridge only reports speech
+                                // AFTER a pause, so keep this generous). On a real silence
+                                // it asks the agent what to do, then moves on — no canned line
+  "REFLECT_SECONDS": 4,         // after each person the bot pauses UP TO this long for the agent
+                                // to reflect their update back ("so you did X, got it"), then moves
+                                // on. It advances the moment the reflection lands, so this only
+                                // bounds the wait when the agent is slow — keep it short so turns
+                                // stay snappy. Doubles as resume room for slow thinkers. 0 = off
+  "TARGET_MINUTES": 15,         // the overall length you're aiming for (informational)
+
+  // Wait for someone to say "go ahead" before starting. It also starts the moment
+  // ANYONE speaks after the greeting (fast start) — this is just the initial gate.
+  // false = start as soon as the team is in the room.
+  "WAIT_FOR_GO_AHEAD": true,
+
+  // ── Cross-day blockers: OFF by default ─────────────────────────────────────
+  // false = each standup stands on its own; nothing from last time interrupts the
+  // round. The dated summary files are still written either way, so if someone ASKS
+  // ("what was blocking us last time?") your agent just reads the most recent
+  // OUTPUT_DIR/standup-<date>.md and answers. On demand, not in the way.
+  // true = the bot proactively chases last time's blockers at the start of each
+  // person's turn (persists OUTPUT_DIR/history.json; never leaves your machine).
+  "TRACK_ACROSS_DAYS": false,
+
+  // Where standups + the cross-day history are written (relative to repo root).
+  "OUTPUT_DIR": "standups",
+  "OUTPUT_FORMAT": "md",        // "md", "txt", or "json"
+
+  // The bot STAYS after the round as your summary manager — it only leaves when
+  // someone asks it to (by name), or when everyone else has left the meeting.
+  "LEAVE_WHEN_EMPTY": true,
+  "ALONE_SECONDS": 30,          // safety net: the bridge also leaves after this long alone
+
+  // Voice for the bot (any Kokoro voice id). Blank = your ~/.agentcall default,
+  // else "af_heart".
+  "VOICE": ""
+}
