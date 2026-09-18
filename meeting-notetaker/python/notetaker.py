@@ -351,6 +351,16 @@ def run(meet_url, bot_name, display):
                     err_tail.append(line)
                     if len(err_tail) > 30:
                         del err_tail[0]
+                    # The bridge reports a dropped WebSocket only on stderr, which we
+                    # otherwise show just at the end. Surface it live: while it's
+                    # reconnecting, speech is NOT reaching us, so the notes will have
+                    # a gap — say so at the time rather than leaving a silent hole.
+                    low = line.lower()
+                    if "websocket disconnected" in low:
+                        print("\n  WARNING: lost the connection to the meeting — reconnecting. "
+                              "Anything said until it's back will be missing from the notes.")
+                    elif "websocket reconnected" in low:
+                        print("  Reconnected — capturing again.")
         except Exception:
             pass
 
@@ -364,6 +374,15 @@ def run(meet_url, bot_name, display):
     end_reason = "unknown"
     joined_at = None
     bot_lower = bot_name.lower()
+
+    # Waiting-room clock. The bot can only capture speech once it's IN the meeting
+    # (call.bot_ready). If the meeting has a lobby it sits outside until a host
+    # clicks Admit — hearing nothing — and without this it would sit there for the
+    # whole meeting and bill for it. The clock starts when the lobby is first
+    # reported and deliberately does NOT restart on repeat waiting-room events, so
+    # a chatty backend can't keep pushing the deadline out forever.
+    admit_limit = CONFIG.get("ADMIT_SECONDS") or 0
+    waiting_since = None
 
     def set_status(status):
         with STATE_LOCK:
@@ -413,6 +432,14 @@ def run(meet_url, bot_name, display):
                 # nothing until I leave the meeting" bug.
                 ev = events.get(timeout=0.5)
             except queue.Empty:
+                # Still stuck in the lobby past the limit? Stop waiting on a meeting
+                # nobody is going to let us into — leaving here runs the same teardown
+                # as Ctrl-C, so the call is DELETEd and billing stops.
+                if (waiting_since and admit_limit
+                        and (time.time() - waiting_since) > admit_limit):
+                    print(f"\nNobody admitted '{bot_name}' within {int(admit_limit)}s — leaving.")
+                    end_reason = "not_admitted"
+                    break
                 continue
             if ev is None:
                 break
@@ -423,10 +450,38 @@ def run(meet_url, bot_name, display):
             if et == "call.created":
                 print(f"  Call created: {ev.get('call_id')}")
 
+            elif et == "call.bot_joining_meeting":
+                detail = ev.get("detail", "")
+                print(f"  Joining{' (' + detail + ')' if detail else ''}...")
+
+            elif et == "call.bot_waiting_room":
+                # The lobby is the single most common reason a run captures nothing:
+                # the bot is outside the meeting, so there is no audio to transcribe.
+                # Say so plainly — the old build showed nothing at all here.
+                if waiting_since is None:
+                    waiting_since = time.time()
+                    set_status("waiting to be admitted")
+                    print(f"\n  In the waiting room — please click 'Admit' for '{bot_name}' in the meeting.")
+                    print("  (nothing is captured until it's admitted"
+                          + (f"; leaving in {int(admit_limit)}s if nobody does)" if admit_limit else ")"))
+
             elif et == "call.bot_ready":
                 joined_at = datetime.now()
+                waiting_since = None
                 set_status("in meeting")
                 print("In the meeting. Listening...\n")
+
+            elif et == "error":
+                print(f"  Bridge error: {ev.get('message', 'unknown error')}")
+
+            elif et == "call.credits_low":
+                print(f"  WARNING: AgentCall credits low — about "
+                      f"{ev.get('estimated_minutes_remaining', 0)} minutes left. "
+                      "Top up at https://app.agentcall.dev/add-credits")
+
+            elif et == "call.max_duration_warning":
+                print(f"  WARNING: this call hits its max duration in "
+                      f"{ev.get('minutes_remaining', 5)} minutes and the bot will be dropped.")
 
             elif et in ("participant.joined", "meeting.participant_joined"):
                 name = ev.get("name") or (ev.get("participant") or {}).get("name", "")
@@ -523,6 +578,13 @@ def run(meet_url, bot_name, display):
             print("\nNo transcript captured - nothing to save.")
             if end_reason == "interrupted":
                 print("(Stopped before the bot finished joining — nothing was captured.)")
+            elif end_reason in ("not_admitted", "rejected") or waiting_since:
+                # Be explicit: this is the case people report as "the transcript
+                # is missing". The bot never got in, so there was never anything
+                # to capture — locally or on AgentCall's side.
+                print("The bot never got past the waiting room, so it heard nothing.")
+                print(f"Next time, admit '{bot_name}' when it asks to join, or turn the")
+                print("meeting's waiting room off before starting it.")
             elif joined_at is None:
                 print("The bridge exited before joining. Its output:")
                 _keys = ("error", "cannot find", "no module", "not found", "traceback", "exception")

@@ -22,6 +22,12 @@
   "LEAVE_WHEN_EMPTY": true,
   "ALONE_SECONDS": 30,          // safety net: the bridge also leaves after this long alone
 
+  // If the meeting has a waiting room, the bot sits in the lobby until a host
+  // clicks "Admit". Nothing is captured while it waits — it isn't in the meeting
+  // yet, so there's no audio and no transcript. Give up after this long rather
+  // than wait (and bill) for a meeting the bot was never let into. 0 = wait forever.
+  "ADMIT_SECONDS": 600,
+
   // A live transcript page in YOUR browser at http://localhost:<WEB_PORT>.
   "WEB": true,
   "WEB_PORT": 8080,

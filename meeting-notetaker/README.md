@@ -344,6 +344,35 @@ Whatever you can imagine for a meeting, that's where you build it.
 
 ---
 
+## Nothing got captured?
+
+Almost always the same thing: **the bot was never admitted.** If your meeting has a waiting room, the
+bot sits in the lobby until a host lets it in. It is outside the meeting the whole time, so there is no
+audio, no transcript, and nothing to save. You will see this:
+
+```
+  In the waiting room — please click 'Admit' for 'Nova' in the meeting.
+  (nothing is captured until it's admitted; leaving in 600s if nobody does)
+```
+
+Admit the bot and it starts capturing immediately. If nobody does, it leaves after `ADMIT_SECONDS`
+(10 minutes by default) rather than sitting there billing for a meeting it never entered, and tells you
+why. Set `ADMIT_SECONDS` in [`config.jsonc`](config.jsonc) to change the wait, or `0` to wait forever.
+
+To avoid the lobby entirely: start the meeting yourself first, or turn its waiting room off.
+
+| What you see | What it means |
+|---|---|
+| `In the waiting room…` then nothing | Nobody clicked Admit. Nothing is being captured. |
+| `In the meeting. Listening...` | It is in, and capturing. |
+| `Bridge error: …` | The call could not start. Check your API key and network. |
+| `WARNING: AgentCall credits low` | Top up, or the bot stops mid-meeting. |
+| `The bridge exited before joining` | Dependencies missing. Run `pip install -r requirements.txt`. |
+
+Run with `NOTETAKER_DEBUG=1` to print every raw bridge event.
+
+---
+
 ## How it works
 
 ```

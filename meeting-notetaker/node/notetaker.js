@@ -247,7 +247,19 @@ async function run(meetUrl, botName, display) {
     let errTail = [];   // last bridge stderr lines, shown only if it fails to join
     proc.stderr.setEncoding("utf-8");
     proc.stderr.on("data", (d) => {
-      for (const ln of d.split("\n")) if (ln.trim()) errTail.push(ln.trim());
+      for (const ln of d.split("\n")) {
+        if (!ln.trim()) continue;
+        errTail.push(ln.trim());
+        // The bridge reports a dropped WebSocket only on stderr, which we otherwise
+        // show just at the end. Surface it live: while it's reconnecting, speech is
+        // NOT reaching us, so the notes will have a gap — say so at the time.
+        const low = ln.toLowerCase();
+        if (low.includes("websocket disconnected")) {
+          console.log("\n  WARNING: lost the connection to the meeting — reconnecting. Anything said until it's back will be missing from the notes.");
+        } else if (low.includes("websocket reconnected")) {
+          console.log("  Reconnected — capturing again.");
+        }
+      }
       if (errTail.length > 30) errTail = errTail.slice(-30);
     });
 
@@ -255,6 +267,11 @@ async function run(meetUrl, botName, display) {
     let notes = null, present = new Set();
     const seen = new Set();
     let seenHuman = false, callId = null, endReason = "unknown", joinedAt = null, done = false;
+    // Waiting-room clock — see notetaker.py. The bot captures nothing until it's
+    // admitted, so don't sit in a lobby (and bill) for a meeting nobody lets it
+    // into. Starts on the first waiting-room event and never restarts on repeats.
+    const admitLimit = CONFIG.ADMIT_SECONDS || 0;
+    let waitingSince = null, admitTimer = null;
     const botLower = botName.toLowerCase();
 
     const setStatus = (s) => { STATE.bot = botName; STATE.status = s; STATE.present = present.size; };
@@ -298,6 +315,7 @@ async function run(meetUrl, botName, display) {
     const finish = async (reason) => {
       if (done) return;
       done = true;
+      if (admitTimer) { clearTimeout(admitTimer); admitTimer = null; }   // never let it fire into teardown
       if (reason && endReason === "unknown") endReason = reason;
       sendLeave();
       if (callId === null && proc.exitCode === null) { console.log("Stopping the call..."); await waitForCallId(); }
@@ -321,6 +339,12 @@ async function run(meetUrl, botName, display) {
         console.log("\nNo transcript captured - nothing to save.");
         if (endReason === "interrupted") {
           console.log("(Stopped before the bot finished joining — nothing was captured.)");
+        } else if (endReason === "not_admitted" || endReason === "rejected" || waitingSince) {
+          // The case people report as "the transcript is missing": the bot never
+          // got in, so there was never anything to capture, here or on AgentCall.
+          console.log("The bot never got past the waiting room, so it heard nothing.");
+          console.log(`Next time, admit '${botName}' when it asks to join, or turn the`);
+          console.log("meeting's waiting room off before starting it.");
         } else if (!joinedAt) {
           console.log("The bridge exited before joining. Its output:");
           const hot = errTail.filter((l) => ["error", "cannot find", "no module", "not found", "traceback", "exception"].some((k) => l.toLowerCase().includes(k)));
@@ -355,10 +379,37 @@ async function run(meetUrl, botName, display) {
         if (et === "call.created") {
           callId = ev.call_id;
           console.log(`  Call created: ${callId}`);
+        } else if (et === "call.bot_joining_meeting") {
+          console.log(`  Joining${ev.detail ? ` (${ev.detail})` : ""}...`);
+        } else if (et === "call.bot_waiting_room") {
+          // The lobby is the most common reason a run captures nothing: the bot is
+          // outside the meeting, so there's no audio to transcribe. Say so plainly.
+          if (waitingSince === null) {
+            waitingSince = Date.now();
+            setStatus("waiting to be admitted");
+            console.log(`\n  In the waiting room — please click 'Admit' for '${botName}' in the meeting.`);
+            console.log(`  (nothing is captured until it's admitted${admitLimit ? `; leaving in ${Math.round(admitLimit)}s if nobody does)` : ")"}`);
+            if (admitLimit) {
+              admitTimer = setTimeout(() => {
+                if (!joinedAt && !done) {
+                  console.log(`\nNobody admitted '${botName}' within ${Math.round(admitLimit)}s — leaving.`);
+                  finish("not_admitted");
+                }
+              }, admitLimit * 1000);
+            }
+          }
         } else if (et === "call.bot_ready") {
           joinedAt = Date.now();
+          waitingSince = null;
+          if (admitTimer) { clearTimeout(admitTimer); admitTimer = null; }
           setStatus("in meeting");
           console.log("In the meeting. Listening...\n");
+        } else if (et === "error") {
+          console.log(`  Bridge error: ${ev.message || "unknown error"}`);
+        } else if (et === "call.credits_low") {
+          console.log(`  WARNING: AgentCall credits low — about ${ev.estimated_minutes_remaining || 0} minutes left. Top up at https://app.agentcall.dev/add-credits`);
+        } else if (et === "call.max_duration_warning") {
+          console.log(`  WARNING: this call hits its max duration in ${ev.minutes_remaining || 5} minutes and the bot will be dropped.`);
         } else if (et === "participant.joined" || et === "meeting.participant_joined") {
           const name = ev.name || (ev.participant && ev.participant.name) || "";
           if (name && name.toLowerCase() !== botLower) { present.add(name); seen.add(name); seenHuman = true; }
